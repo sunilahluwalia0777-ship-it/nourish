@@ -1,0 +1,3293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nourish — Meal Planner</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js">
+// ══════════════════════════════════════════════════════
+// BIG CARD FLIP
+// ══════════════════════════════════════════════════════
+let bigCardOpen = false;
+
+function openBigCard(e, dayIdx, mealType) {
+  if (e) e.stopPropagation();
+  const meal = plan[dayIdx]?.[mealType];
+  if (!meal || meal.id === '__none__' || meal.id === '__eatout__') return;
+
+  // Populate front
+  const typeEl = document.getElementById('bc-type');
+  typeEl.textContent = mealType;
+  typeEl.className = 'bigcard-meal-type ' + mealType;
+
+  document.getElementById('bc-name').textContent = meal.name;
+  document.getElementById('bc-note').textContent = meal.note || '';
+
+  const n = meal.nutrition || {};
+  document.getElementById('bc-macros').innerHTML = [
+    {cls:'cal', val:meal.cal||0, lbl:'CAL'},
+    {cls:'pro', val:n.protein||0, lbl:'PROTEIN'},
+    {cls:'car', val:n.carbs||0, lbl:'CARBS'},
+    {cls:'fat', val:n.fat||0, lbl:'FAT'},
+  ].map(m => `<div class="bfm ${m.cls}"><div class="bfm-val">${m.val}</div><div class="bfm-lbl">${m.lbl}</div></div>`).join('');
+
+  // Set front accent colour
+  document.getElementById('bigcard-front').className = `bigcard-face bigcard-front type-${mealType}`;
+
+  // Populate back
+  document.getElementById('bc-back-title').textContent = meal.name;
+  document.getElementById('bc-back-sub').textContent = meal.serving ? `Serving: ${meal.serving}` : '';
+
+  document.getElementById('bc-ingredients').innerHTML =
+    (meal.ingredients || []).map(i => `<li>${i}</li>`).join('');
+
+  document.getElementById('bc-steps').innerHTML =
+    (meal.steps || []).map(s => `<li>${s}</li>`).join('');
+
+  // Nutrition table
+  const cal = meal.cal || 0;
+  document.getElementById('bc-nutrition').innerHTML = `
+    <div class="nut-row major"><span class="nt-l">Calories</span><span class="nt-v">${cal}<span class="nt-unit">kcal</span></span></div>
+    <div class="nut-row major"><span class="nt-l">Protein</span><span class="nt-v">${n.protein||0}<span class="nt-unit">g</span></span></div>
+    <div class="nut-row major"><span class="nt-l">Carbs</span><span class="nt-v">${n.carbs||0}<span class="nt-unit">g</span></span></div>
+    <div class="nut-row minor"><span class="nt-l">Fiber</span><span class="nt-v">${n.fiber||0}<span class="nt-unit">g</span></span></div>
+    <div class="nut-row minor"><span class="nt-l">Sugars</span><span class="nt-v">${n.sugar||0}<span class="nt-unit">g</span></span></div>
+    <div class="nut-row major"><span class="nt-l">Fat</span><span class="nt-v">${n.fat||0}<span class="nt-unit">g</span></span></div>
+    <div class="nut-row minor"><span class="nt-l">Sodium</span><span class="nt-v">${n.sodium||0}<span class="nt-unit">mg</span></span></div>
+    <div class="nut-row minor"><span class="nt-l">Cholesterol</span><span class="nt-v">${n.cholesterol||0}<span class="nt-unit">mg</span></span></div>
+  `;
+
+  // Macro bars
+  const pPct = cal > 0 ? Math.round((n.protein||0)*4/cal*100) : 0;
+  const cPct = cal > 0 ? Math.round((n.carbs||0)*4/cal*100) : 0;
+  const fPct = cal > 0 ? Math.round((n.fat||0)*9/cal*100) : 0;
+  document.getElementById('bc-macro-bars').innerHTML = [
+    {cls:'p', lbl:'Protein', pct:pPct},
+    {cls:'c', lbl:'Carbs', cPct, pct:cPct},
+    {cls:'f', lbl:'Fat', pct:fPct},
+  ].map(m => `<div class="mb-row">
+    <div class="mb-label"><span>${m.lbl}</span><span>${m.pct}%</span></div>
+    <div class="mb-track"><div class="mb-fill ${m.cls}" style="width:${m.pct}%"></div></div>
+  </div>`).join('');
+
+  // Source link
+  const slEl = document.getElementById('bc-src-link');
+  if (meal.url || meal.page) {
+    const icon = meal.srcType==='chef'?'📖':meal.srcType==='youtube'?'▶':'🌐';
+    const label = meal.page ? `${meal.src} · ${meal.page}` : (meal.src || '');
+    const tag = meal.url ? 'a' : 'div';
+    const attr = meal.url ? `href="${meal.url}" target="_blank"` : '';
+    slEl.innerHTML = `<${tag} ${attr} class="src-link-back">${icon} ${label}</${tag}>`;
+  } else { slEl.innerHTML = ''; }
+
+  // Reset to front face
+  document.getElementById('bigcard-flipper').classList.remove('flipped');
+
+  // Add Instacart button to big card nutrition panel
+  const icOld = document.getElementById('bc-ic-container');
+  if (icOld) icOld.remove();
+  const icDiv = document.createElement('div');
+  icDiv.id = 'bc-ic-container';
+  icDiv.className = 'ic-back-container';
+  icDiv.style.cssText = 'margin-top:10px';
+  icDiv.innerHTML = `<button class="ic-back-btn" onclick="shopMealOnInstacart(this,'${meal.id}','${mealType}')">
+    🛒 Shop on Instacart
+  </button>`;
+  document.getElementById('bc-src-link').after(icDiv);
+
+  // Open overlay
+  const overlay = document.getElementById('bigcard-overlay');
+  overlay.style.display = 'flex';
+  requestAnimationFrame(() => { overlay.classList.add('open'); });
+  bigCardOpen = true;
+}
+
+function flipBigCard() {
+  document.getElementById('bigcard-flipper').classList.toggle('flipped');
+}
+
+function closeBigCard(e) {
+  if (e) e.stopPropagation();
+  const overlay = document.getElementById('bigcard-overlay');
+  overlay.classList.remove('open');
+  setTimeout(() => { overlay.style.display = 'none'; }, 400);
+  bigCardOpen = false;
+}
+
+function handleBigCardOverlayClick(e) {
+  if (e.target === e.currentTarget) closeBigCard();
+}
+
+// Keyboard support
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && bigCardOpen) closeBigCard();
+  if ((e.key === 'Enter' || e.key === ' ') && bigCardOpen) { e.preventDefault(); flipBigCard(); }
+});
+
+
+
+// ══════════════════════════════════════════════════════
+// GITHUB SYNC
+// ══════════════════════════════════════════════════════
+
+function getGhConfig() {
+  const cfg = window.NOURISH_CONFIG || {};
+  return {
+    user:  localStorage.getItem('gh_user')  || cfg.githubUser  || '',
+    repo:  localStorage.getItem('gh_repo')  || cfg.githubRepo  || '',
+    token: localStorage.getItem('gh_token') || cfg.githubToken || '',
+  };
+}
+
+function isGhConnected() {
+  const c = getGhConfig();
+  return c.user && c.repo && c.token;
+}
+
+// Load saved settings into panel inputs
+function openGithubPanel() {
+  const panel = document.getElementById('gh-panel');
+  const isOpen = panel.classList.contains('open');
+  panel.classList.toggle('open', !isOpen);
+  if (!isOpen) {
+    const c = getGhConfig();
+    document.getElementById('gh-user').value  = c.user;
+    document.getElementById('gh-repo').value  = c.repo;
+    document.getElementById('gh-token').value = c.token;
+    if (isGhConnected()) loadGhHistory();
+  }
+}
+
+function saveGithubSettings() {
+  const user  = document.getElementById('gh-user').value.trim();
+  const repo  = document.getElementById('gh-repo').value.trim();
+  const token = document.getElementById('gh-token').value.trim();
+  const st = document.getElementById('gh-status');
+
+  if (!user || !repo || !token) {
+    st.className = 'gh-status err';
+    st.textContent = 'Please fill in all three fields.';
+    return;
+  }
+
+  localStorage.setItem('gh_user', user);
+  localStorage.setItem('gh_repo', repo);
+  localStorage.setItem('gh_token', token);
+
+  st.className = 'gh-status ok';
+  st.textContent = '✓ Settings saved. Testing connection…';
+
+  // Test by fetching repo info
+  fetch(`https://api.github.com/repos/${user}/${repo}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }
+  }).then(r => {
+    if (r.ok) {
+      st.textContent = `✓ Connected to ${user}/${repo}`;
+      updateGhButton(true);
+      loadGhHistory();
+    } else {
+      st.className = 'gh-status err';
+      st.textContent = r.status === 404
+        ? 'Repo not found — check the name.'
+        : r.status === 401
+        ? 'Token rejected — check permissions (needs repo scope).'
+        : `GitHub error ${r.status}`;
+    }
+  }).catch(() => {
+    st.className = 'gh-status err';
+    st.textContent = 'Could not reach GitHub — check your connection.';
+  });
+}
+
+function updateGhButton(connected) {
+  const btn = document.getElementById('gh-btn');
+  if (connected) {
+    btn.style.borderColor = '#2a6a42';
+    btn.style.color = '#6AAD7A';
+    btn.textContent = '⬡ GitHub ✓';
+  }
+}
+
+// GitHub API helpers
+async function ghGet(path) {
+  const {user, repo, token} = getGhConfig();
+  const r = await fetch(`https://api.github.com/repos/${user}/${repo}/contents/${path}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }
+  });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`GitHub GET ${r.status}`);
+  return r.json();
+}
+
+async function ghPut(path, content, message, sha) {
+  const {user, repo, token} = getGhConfig();
+  const body = {
+    message,
+    content: btoa(unescape(encodeURIComponent(JSON.stringify(content, null, 2)))),
+  };
+  if (sha) body.sha = sha;
+  const r = await fetch(`https://api.github.com/repos/${user}/${repo}/contents/${path}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) {
+    const err = await r.json();
+    throw new Error(err.message || `GitHub PUT ${r.status}`);
+  }
+  return r.json();
+}
+
+// Serialise the current plan to a plain object
+function serialisePlan() {
+  const weekKey = window._mondayDate.toISOString().slice(0, 10);
+  const out = { weekOf: weekKey, savedAt: new Date().toISOString(), days: {} };
+  DAYS.forEach((day, di) => {
+    out.days[day] = {};
+    MEAL_TYPES.forEach(t => {
+      const m = plan[di][t];
+      if (!m) return;
+      out.days[day][t] = {
+        id: m.id, name: m.name, cal: m.cal || 0,
+        protein: m.nutrition?.protein || 0,
+        carbs:   m.nutrition?.carbs   || 0,
+        fat:     m.nutrition?.fat     || 0,
+      };
+    });
+  });
+  return out;
+}
+
+// Save weekly plan + update history index
+async function saveToGithub() {
+  if (!isGhConnected()) return;
+  const weekKey = window._mondayDate.toISOString().slice(0, 10);
+  const planData = serialisePlan();
+
+  showGhSyncStatus('saving');
+
+  try {
+    // 1. Save/update the week file: data/week_YYYY-MM-DD.json
+    const weekPath = `data/week_${weekKey}.json`;
+    const existing = await ghGet(weekPath);
+    await ghPut(weekPath, planData,
+      `Plan: week of ${weekKey}`,
+      existing?.sha);
+
+    // 2. Save custom meals if any
+    const customMeals = {};
+    MEAL_TYPES.forEach(t => {
+      const customs = (MEALS[t] || []).filter(m => m.id.startsWith('custom_'));
+      if (customs.length) customMeals[t] = customs;
+    });
+    if (Object.keys(customMeals).length) {
+      const cmPath = 'data/custom_meals.json';
+      const cmExisting = await ghGet(cmPath);
+      await ghPut(cmPath, customMeals, 'Update custom meals', cmExisting?.sha);
+    }
+
+    // 3. Update history index: data/history.json
+    const histPath = 'data/history.json';
+    const histExisting = await ghGet(histPath);
+    let history = [];
+    if (histExisting) {
+      try { history = JSON.parse(atob(histExisting.content.replace(/\n/g,''))); } catch(e){}
+    }
+    // Upsert this week
+    const idx = history.findIndex(h => h.weekOf === weekKey);
+    const entry = {
+      weekOf: weekKey,
+      savedAt: planData.savedAt,
+      totalCal: DAYS.reduce((s,_,di) =>
+        s + MEAL_TYPES.reduce((s2,t) => s2 + (plan[di][t]?.cal||0), 0), 0),
+      avgDailyCal: Math.round(DAYS.reduce((s,_,di) =>
+        s + MEAL_TYPES.reduce((s2,t) => s2 + (plan[di][t]?.cal||0), 0), 0) / 7),
+    };
+    if (idx >= 0) history[idx] = entry; else history.unshift(entry);
+    history = history.slice(0, 52); // keep 1 year
+    await ghPut(histPath, history, `History index updated ${weekKey}`, histExisting?.sha);
+
+    showGhSyncStatus('ok');
+    loadGhHistory();
+  } catch(e) {
+    showGhSyncStatus('err', e.message);
+  }
+}
+
+function showGhSyncStatus(state, msg) {
+  const el = document.getElementById('gh-sync-status');
+  el.style.display = 'inline';
+  if (state === 'saving') {
+    el.style.color = 'var(--text3)';
+    el.textContent = '↑ Saving to GitHub…';
+  } else if (state === 'ok') {
+    el.style.color = '#6AAD7A';
+    el.textContent = '✓ Saved to GitHub';
+    setTimeout(() => { el.style.display = 'none'; }, 4000);
+  } else {
+    el.style.color = 'var(--rose-light)';
+    el.textContent = `⚠ GitHub: ${msg}`;
+  }
+}
+
+// Load history list into panel
+async function loadGhHistory() {
+  const container = document.getElementById('gh-history-list');
+  container.textContent = 'Loading…';
+  try {
+    const file = await ghGet('data/history.json');
+    if (!file) { container.textContent = 'No history yet — complete your first plan to start.'; return; }
+    const history = JSON.parse(atob(file.content.replace(/\n/g,'')));
+    if (!history.length) { container.textContent = 'No saved weeks yet.'; return; }
+    container.innerHTML = history.map(h =>
+      `<div class="gh-history-item">
+        <span class="wk">Week of ${h.weekOf}</span>
+        <span style="font-size:11px;color:var(--text3)">${h.avgDailyCal} kcal/day</span>
+        <button class="load-btn" onclick="loadWeekFromGithub('${h.weekOf}')">Load</button>
+      </div>`
+    ).join('');
+  } catch(e) {
+    container.textContent = 'Could not load history.';
+  }
+}
+
+// Load a past week's plan
+async function loadWeekFromGithub(weekKey) {
+  try {
+    const file = await ghGet(`data/week_${weekKey}.json`);
+    if (!file) { alert('Week not found.'); return; }
+    const data = JSON.parse(atob(file.content.replace(/\n/g,'')));
+
+    // Clear current plan
+    DAYS.forEach((_,di) => MEAL_TYPES.forEach(t => {
+      if (plan[di][t]) clearMeal({stopPropagation:()=>{}}, di, t);
+    }));
+
+    // Re-apply saved meals
+    DAYS.forEach((day, di) => {
+      MEAL_TYPES.forEach(t => {
+        const saved = data.days?.[day]?.[t];
+        if (!saved) return;
+        // Find meal in database by id
+        const meal = Object.values(MEALS).flat().find(m => m.id === saved.id)
+          || { ...saved, tags:['custom'], src:'', srcType:'simple', ingredients:[], steps:[], nutrition:{protein:saved.protein,carbs:saved.carbs,fat:saved.fat} };
+        setMeal(di, t, meal);
+      });
+    });
+
+    document.getElementById('gh-panel').classList.remove('open');
+    showToast(`Loaded week of ${weekKey}`);
+  } catch(e) {
+    alert('Could not load week: ' + e.message);
+  }
+}
+
+// Load custom meals from GitHub on startup
+async function loadCustomMealsFromGithub() {
+  if (!isGhConnected()) return;
+  try {
+    const file = await ghGet('data/custom_meals.json');
+    if (!file) return;
+    const customs = JSON.parse(atob(file.content.replace(/\n/g,'')));
+    Object.entries(customs).forEach(([type, meals]) => {
+      if (!MEALS[type]) MEALS[type] = [];
+      meals.forEach(m => {
+        if (!MEALS[type].find(x => x.id === m.id)) MEALS[type].unshift(m);
+      });
+    });
+  } catch(e) { /* silently ignore */ }
+}
+
+// Close panel on outside click
+document.addEventListener('click', e => {
+  const panel = document.getElementById('gh-panel');
+  const btn = document.getElementById('gh-btn');
+  if (panel.classList.contains('open') && !panel.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+    panel.classList.remove('open');
+  }
+});
+
+// Init: restore GitHub button state + load remote custom meals
+(function initGithub() {
+  if (isGhConnected()) {
+    updateGhButton(true);
+    loadCustomMealsFromGithub();
+  }
+})();
+
+</script>
+<style>
+/* ─── Design tokens ───────────────────────────────────── */
+:root {
+  --bg: #F5F2ED;
+  --card-bg: #FDFCFA;
+  --card-back: #1C1A16;
+  --header-bg: #1C1A16;
+  --surface: #ECEAE4;
+  --border: #DDD9D0;
+  --border-strong: #C4BFB4;
+  --text: #1C1A16;
+  --text2: #6B6760;
+  --text3: #A8A49C;
+  --text-inv: #F5F2ED;
+  --text-inv2: #9E9A92;
+  --gold: #BF8B3C;
+  --gold-light: #D4A758;
+  --gold-pale: #F5EDD8;
+  --green: #3D6B4A;
+  --green-light: #5A9068;
+  --green-pale: #E4EFE7;
+  --blue: #2E5F8A;
+  --blue-light: #4A87BE;
+  --blue-pale: #E0EBF5;
+  --rose: #8A3F3A;
+  --rose-light: #BE5A54;
+  --rose-pale: #F5E4E2;
+  --serif: 'Cormorant Garamond', Georgia, serif;
+  --sans: 'Jost', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* ─── Header ──────────────────────────────────────────── */
+header {
+  background: var(--header-bg);
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+.logo {
+  font-family: var(--serif);
+  font-size: 22px;
+  color: var(--text-inv);
+  letter-spacing: 0.5px;
+}
+.logo em { color: var(--gold-light); font-style: italic; }
+.header-actions { display: flex; align-items: center; gap: 8px; }
+.week-tag {
+  font-size: 11px;
+  color: var(--text-inv2);
+  letter-spacing: 0.5px;
+  margin-right: 8px;
+}
+
+.hbtn {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid #3A3830;
+  background: transparent;
+  color: var(--text-inv2);
+  cursor: pointer;
+  transition: all .2s;
+  letter-spacing: 0.3px;
+}
+.hbtn:hover { border-color: var(--gold); color: var(--gold-light); }
+.hbtn.primary { background: var(--gold); border-color: var(--gold); color: #1C1A16; font-weight: 600; }
+.hbtn.primary:hover { background: var(--gold-light); border-color: var(--gold-light); }
+
+/* ─── API strip ───────────────────────────────────────── */
+#api-strip {
+  background: #2A271F;
+  border-bottom: 1px solid #3A3730;
+  padding: 7px 28px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+#api-strip label { font-size: 11px; color: var(--gold-light); letter-spacing: 0.5px; font-weight: 500; }
+#api-strip input {
+  flex: 1; max-width: 340px;
+  background: #1C1A16;
+  border: 1px solid #3A3730;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--text-inv);
+  outline: none;
+}
+#api-strip input:focus { border-color: var(--gold); }
+#api-strip input::placeholder { color: #4A4840; }
+.api-save { background: #3A3730; border: none; color: var(--text-inv2); font-size: 11px; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-family: var(--sans); transition: all .2s; }
+.api-save:hover { color: var(--gold-light); }
+.api-ok { font-size: 11px; color: var(--green-light); }
+.api-err { font-size: 11px; color: var(--rose-light); }
+
+/* ─── Main body ───────────────────────────────────────── */
+.main-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* ─── Calendar area ───────────────────────────────────── */
+.calendar-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px 16px;
+}
+
+/* Day headers */
+.cal-day-headers {
+  display: grid;
+  grid-template-columns: 140px repeat(7, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.day-hd {
+  text-align: center;
+  padding: 10px 4px;
+}
+.day-hd .dow {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.day-hd .dn {
+  font-family: var(--serif);
+  font-size: 32px;
+  color: var(--text);
+  margin-top: 3px;
+  line-height: 1;
+}
+.day-hd.today .dow { color: var(--gold); }
+.day-hd.today .dn {
+  color: var(--gold);
+  background: var(--gold-pale);
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  margin: 4px auto 0;
+  font-size: 24px;
+}
+
+/* Meal rows */
+.meal-row {
+  display: grid;
+  grid-template-columns: 140px repeat(7, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.row-label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 12px;
+  font-family: var(--serif);
+  font-size: 28px;
+  font-weight: 600;
+  font-style: italic;
+  letter-spacing: -0.3px;
+  text-transform: none;
+  color: var(--text3);
+  cursor: pointer;
+  user-select: none;
+  transition: opacity .15s;
+  white-space: nowrap;
+}
+.row-label:hover { opacity: .75; }
+.row-label::after {
+  content: ' ↓';
+  font-size: 11px;
+  font-style: normal;
+  opacity: 0;
+  margin-left: 3px;
+  transition: opacity .15s;
+}
+.row-label:hover::after { opacity: 1; }
+.row-label.breakfast { color: var(--gold); }
+.row-label.lunch { color: var(--green-light); }
+.row-label.snack { color: var(--blue-light); }
+.row-label.dinner { color: var(--rose-light); }
+
+/* ─── THE FLIP CARD ───────────────────────────────────── */
+.flip-wrap {
+  perspective: 900px;
+  height: 118px;
+}
+.flip-card {
+  width: 100%; height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform .55s cubic-bezier(.4,0,.2,1);
+  cursor: pointer;
+}
+.flip-card.flipped { transform: rotateY(180deg); }
+
+.card-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  overflow: hidden;
+}
+
+/* Front face */
+.card-front {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 9px 10px 9px 10px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.flip-wrap:hover .card-front {
+  border-color: var(--border-strong);
+  box-shadow: 0 2px 10px rgba(0,0,0,.08);
+}
+.flip-wrap.active .card-front { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-pale); }
+
+/* meal type accent bar */
+.card-front::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  border-radius: 10px 0 0 10px;
+  background: var(--border);
+  transition: background .2s;
+}
+.meal-row:has(.row-label.breakfast) .card-front::before { background: var(--gold); }
+.meal-row:has(.row-label.lunch) .card-front::before { background: var(--green-light); }
+.meal-row:has(.row-label.snack) .card-front::before { background: var(--blue-light); }
+.meal-row:has(.row-label.dinner) .card-front::before { background: var(--rose-light); }
+
+.card-front.empty::before { background: var(--border); }
+
+.card-meal-name {
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.3;
+  padding-left: 6px;
+  letter-spacing: -0.1px;
+}
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  padding-left: 6px;
+  flex-wrap: wrap;
+}
+.card-cal { font-size: 12px; color: var(--text2); }
+.card-tag {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 6px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.card-tag.chef { background: var(--gold-pale); color: var(--gold); }
+.card-tag.youtube { background: #FEF0F0; color: #C00; }
+.flip-hint {
+  position: absolute;
+  bottom: 5px; right: 7px;
+  font-size: 9px;
+  color: var(--text3);
+  opacity: 0;
+  transition: opacity .2s;
+}
+.flip-wrap:hover .flip-hint { opacity: 1; }
+
+/* empty state */
+.card-empty-hint {
+  text-align: center;
+  color: var(--text3);
+  font-size: 13px;
+  padding-left: 6px;
+}
+.card-empty-hint .plus { font-size: 20px; display: block; opacity: .4; margin-bottom: 3px; }
+
+/* special states */
+.card-front.state-none .card-meal-name { color: var(--text3); font-style: italic; }
+.card-front.state-eatout .card-meal-name { color: var(--gold); }
+
+/* Back face */
+.card-back {
+  background: var(--card-back);
+  border: 1px solid #2A2820;
+  transform: rotateY(180deg);
+  padding: 8px 10px;
+  display: flex;
+  gap: 10px;
+}
+.back-left {
+  flex: 1;
+  overflow: hidden;
+  min-width: 0;
+}
+.back-title {
+  font-family: var(--serif);
+  font-size: 14px;
+  color: var(--text-inv);
+  line-height: 1.25;
+  margin-bottom: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.back-ingredients {
+  font-size: 11px;
+  color: var(--text-inv2);
+  line-height: 1.6;
+}
+.back-right {
+  width: 80px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.back-macro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #2A2820;
+  border-radius: 6px;
+  padding: 3px 2px;
+  flex: 1;
+}
+.back-macro .bm-val { font-family: var(--serif); font-size: 15px; color: var(--text-inv); line-height: 1; }
+.back-macro .bm-lbl { font-size: 9px; color: var(--text-inv2); margin-top: 1px; letter-spacing: 0.5px; }
+.back-macro.cals .bm-val { color: var(--gold-light); }
+.back-macro.prot .bm-val { color: #6AAD7A; }
+.back-macro.carb .bm-val { color: #5A9ABE; }
+.back-macro.fat .bm-val { color: #C4726A; }
+
+/* Macros summary row */
+.macros-row {
+  display: grid;
+  grid-template-columns: 140px repeat(7, 1fr);
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.macros-row-label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 10px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.day-macro-cell {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 4px;
+}
+.dmc-cal { font-family: var(--serif); font-size: 19px; color: var(--text); text-align: center; display: block; }
+.dmc-macros { display: flex; justify-content: space-around; margin-top: 4px; }
+.dmc-m { text-align: center; }
+.dmc-m .v { font-size: 12px; font-weight: 600; }
+.dmc-m .l { font-size: 9px; color: var(--text3); }
+.dmc-m.p .v { color: var(--green); }
+.dmc-m.c .v { color: var(--blue); }
+.dmc-m.f .v { color: var(--rose); }
+
+/* ─── Carousel drawer ─────────────────────────────────── */
+.carousel-drawer {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: var(--card-bg);
+  border-top: 1px solid var(--border-strong);
+  box-shadow: 0 -12px 40px rgba(0,0,0,.15);
+  transform: translateY(100%);
+  transition: transform .38s cubic-bezier(.4,0,.2,1);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+.carousel-drawer.open { transform: translateY(0); }
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.drawer-title {
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--text);
+}
+.drawer-title em { font-style: italic; }
+.drawer-sub { font-size: 12px; color: var(--text2); margin-top: 1px; }
+.drawer-actions { display: flex; align-items: center; gap: 10px; }
+.drawer-search {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--text);
+  outline: none;
+  width: 200px;
+  transition: border-color .2s;
+}
+.drawer-search:focus { border-color: var(--gold); }
+.drawer-search::placeholder { color: var(--text3); }
+.drawer-close {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s;
+}
+.drawer-close:hover { background: var(--text); color: var(--bg); }
+
+/* Drawer tabs */
+.drawer-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 24px 0;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+.dtab {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text3);
+  cursor: pointer;
+  font-family: var(--sans);
+  white-space: nowrap;
+  transition: all .15s;
+  letter-spacing: 0.3px;
+}
+.dtab.active { background: var(--text); border-color: var(--text); color: var(--bg); }
+.dtab:hover:not(.active) { border-color: var(--border-strong); color: var(--text2); }
+
+/* Carousel track */
+.carousel-track-wrap {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  padding: 12px 0 14px;
+}
+.carousel-track {
+  display: flex;
+  gap: 12px;
+  padding: 0 24px;
+  overflow-x: auto;
+  height: 100%;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  align-items: stretch;
+}
+.carousel-track::-webkit-scrollbar { height: 0; }
+
+/* Carousel meal card */
+.c-card {
+  flex-shrink: 0;
+  width: 168px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background: var(--card-bg);
+  cursor: pointer;
+  scroll-snap-align: start;
+  transition: border-color .2s, box-shadow .2s, transform .2s;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+.c-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 4px 16px rgba(0,0,0,.1);
+  transform: translateY(-2px);
+}
+.c-card.selected {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-pale), 0 4px 16px rgba(0,0,0,.1);
+}
+
+.c-card-color-bar {
+  height: 3px;
+  width: 100%;
+}
+.type-breakfast .c-card-color-bar { background: var(--gold); }
+.type-lunch .c-card-color-bar { background: var(--green-light); }
+.type-snack .c-card-color-bar { background: var(--blue-light); }
+.type-dinner .c-card-color-bar { background: var(--rose-light); }
+
+.c-card-body { padding: 10px 12px; flex: 1; display: flex; flex-direction: column; }
+.c-card-name { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.3; margin-bottom: 4px; }
+.c-card-note { font-size: 10px; color: var(--text2); line-height: 1.4; flex: 1; }
+.c-card-tags { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 4px; }
+.c-tag { font-size: 9px; padding: 1px 5px; border-radius: 5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+.c-tag.chef { background: var(--gold-pale); color: var(--gold); }
+.c-tag.indian { background: #F0EAF8; color: #7050A0; }
+.c-tag.fish { background: var(--blue-pale); color: var(--blue); }
+.c-tag.chicken { background: #FFF3E0; color: #9B6820; }
+.c-tag.turkey { background: var(--green-pale); color: var(--green); }
+.c-tag.veggie { background: var(--green-pale); color: var(--green); }
+.c-tag.lowcarb { background: #F0EAF8; color: #6040A0; }
+.c-tag.custom { background: var(--surface); color: var(--text2); border: 1px solid var(--border-strong); }
+
+.c-card-footer {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.c-cal { font-family: var(--serif); font-size: 15px; color: var(--text); }
+.c-cal-lbl { font-size: 9px; color: var(--text3); }
+.c-select-btn {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: all .15s;
+}
+.c-card.selected .c-select-btn { background: var(--gold); border-color: var(--gold); color: #1C1A16; }
+.c-card:hover:not(.selected) .c-select-btn { border-color: var(--text); color: var(--text); }
+
+/* Special cards in carousel */
+.c-card.special { background: var(--surface); }
+.c-card.add-meal-card { background: var(--surface); border-style: dashed; }
+.c-card.add-meal-card:hover { border-style: solid; }
+.c-card.special-none .c-card-name { color: var(--text3); font-style: italic; }
+.c-card.special-eatout .c-card-name { color: var(--gold); }
+
+/* Carousel nav arrows */
+.carousel-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px; height: 32px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+  z-index: 2;
+  transition: all .15s;
+  box-shadow: 0 2px 8px rgba(0,0,0,.1);
+}
+.carousel-nav:hover { background: var(--text); color: var(--bg); }
+.carousel-nav.prev { left: 6px; }
+.carousel-nav.next { right: 6px; }
+
+/* no results */
+.no-results-carousel {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; font-size: 13px; color: var(--text3);
+}
+
+
+#add-meal-overlay { display: none; }
+#add-meal-overlay.open { display: flex; }
+
+
+/* ─── GitHub Panel ──────────────────────────────────────────────────────── */
+.gh-panel {
+  position: fixed;
+  top: 54px; right: 0;
+  width: 320px;
+  background: var(--card-bg);
+  border-left: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
+  border-radius: 0 0 0 14px;
+  box-shadow: -8px 8px 30px rgba(0,0,0,.15);
+  padding: 20px 22px 22px;
+  z-index: 60;
+  transform: translateY(-110%);
+  transition: transform .3s cubic-bezier(.4,0,.2,1);
+}
+.gh-panel.open { transform: translateY(0); }
+.gh-panel-title {
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.gh-panel-sub {
+  font-size: 11px;
+  color: var(--text3);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+.gh-field { margin-bottom: 11px; }
+.gh-field label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 5px;
+}
+.gh-field input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 11px;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  transition: border-color .15s;
+}
+.gh-field input:focus { border-color: #6AAD7A; }
+.gh-field input::placeholder { color: var(--text3); }
+.gh-save-btn {
+  width: 100%;
+  background: #1a3a28;
+  border: 1px solid #2a6a42;
+  color: #6AAD7A;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all .18s;
+  margin-top: 4px;
+}
+.gh-save-btn:hover { background: #1f4830; border-color: #6AAD7A; color: #8ECDA0; }
+.gh-status {
+  font-size: 11px;
+  margin-top: 10px;
+  padding: 8px 11px;
+  border-radius: 7px;
+  display: none;
+  line-height: 1.5;
+}
+.gh-status.ok { background: #0a1f14; color: #6AAD7A; border: 1px solid #2a4a35; display: block; }
+.gh-status.err { background: #1f0a0a; color: var(--rose-light); border: 1px solid #4a2a2a; display: block; }
+.gh-divider { height: 1px; background: var(--border); margin: 16px 0; }
+.gh-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.gh-history-item:last-child { border: none; }
+.gh-history-item .wk { color: var(--text2); }
+.gh-history-item .load-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text3);
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: all .15s;
+}
+.gh-history-item .load-btn:hover { border-color: var(--gold); color: var(--gold); }
+.gh-link { font-size: 11px; color: var(--text3); text-decoration: none; }
+.gh-link:hover { color: var(--gold); }
+
+/* ─── Big Card Flip Overlay ──────────────────────────────────────────────── */
+.bigcard-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(28,26,22,0);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  transition: background .4s ease;
+}
+.bigcard-overlay.open {
+  display: flex;
+  background: rgba(28,26,22,.82);
+  backdrop-filter: blur(10px);
+}
+
+.bigcard-scene {
+  width: min(740px, 94vw);
+  height: min(540px, 88vh);
+  perspective: 1400px;
+}
+
+.bigcard-flipper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateY(0deg);
+  transition: transform .65s cubic-bezier(.4,0,.2,1);
+}
+.bigcard-flipper.flipped {
+  transform: rotateY(180deg);
+}
+
+.bigcard-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0,0,0,.5);
+}
+
+/* Front of big card — same style as small card but large */
+.bigcard-front {
+  background: var(--card-bg);
+  border: 1px solid var(--border-strong);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  cursor: pointer;
+  position: relative;
+}
+.bigcard-front::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 6px;
+  border-radius: 20px 0 0 20px;
+}
+.bigcard-front.type-breakfast::before { background: var(--gold); }
+.bigcard-front.type-lunch::before { background: var(--green-light); }
+.bigcard-front.type-snack::before { background: var(--blue-light); }
+.bigcard-front.type-dinner::before { background: var(--rose-light); }
+
+.bigcard-front-inner { text-align: center; padding: 0 48px; }
+.bigcard-meal-type {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 12px;
+}
+.bigcard-meal-type.breakfast { color: var(--gold); }
+.bigcard-meal-type.lunch { color: var(--green); }
+.bigcard-meal-type.snack { color: var(--blue); }
+.bigcard-meal-type.dinner { color: var(--rose); }
+.bigcard-meal-name {
+  font-family: var(--serif);
+  font-size: 38px;
+  font-weight: 400;
+  color: var(--text);
+  line-height: 1.15;
+  margin-bottom: 14px;
+}
+.bigcard-meal-note {
+  font-size: 15px;
+  color: var(--text2);
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+.bigcard-front-macros {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+.bfm { text-align: center; }
+.bfm-val { font-family: var(--serif); font-size: 26px; color: var(--text); line-height: 1; }
+.bfm-lbl { font-size: 10px; color: var(--text3); letter-spacing: 1px; margin-top: 2px; }
+.bfm.cal .bfm-val { color: var(--gold); }
+.bfm.pro .bfm-val { color: var(--green); }
+.bfm.car .bfm-val { color: var(--blue); }
+.bfm.fat .bfm-val { color: var(--rose); }
+.bigcard-flip-cta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text3);
+  font-weight: 500;
+  transition: color .2s;
+}
+.bigcard-flip-cta:hover { color: var(--text); }
+.bigcard-flip-cta .cta-icon {
+  width: 32px; height: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  transition: all .2s;
+}
+.bigcard-flip-cta:hover .cta-icon { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+/* Close button on big card front */
+.bigcard-close {
+  position: absolute;
+  top: 16px; right: 16px;
+  width: 34px; height: 34px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text2);
+  transition: all .18s;
+  z-index: 2;
+}
+.bigcard-close:hover { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+/* Back of big card — recipe */
+.bigcard-back {
+  background: var(--card-back);
+  border: 1px solid #2A2820;
+  transform: rotateY(180deg);
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+}
+
+.bigcard-back-header {
+  padding: 20px 28px 14px;
+  border-bottom: 1px solid #2A2820;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.bigcard-back-title {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--text-inv);
+  line-height: 1.2;
+}
+.bigcard-back-subtitle {
+  font-size: 11px;
+  color: var(--text-inv2);
+  margin-top: 3px;
+  letter-spacing: 0.3px;
+}
+.bigcard-back-close {
+  width: 30px; height: 30px;
+  background: #2A2820;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-inv2);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all .15s;
+}
+.bigcard-back-close:hover { background: var(--rose); color: #fff; }
+
+.bigcard-back-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Recipe columns */
+.recipe-col-ingredients {
+  width: 240px;
+  flex-shrink: 0;
+  border-right: 1px solid #2A2820;
+  overflow-y: auto;
+  padding: 16px 18px;
+}
+.recipe-col-steps {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px;
+}
+.recipe-col-nutrition {
+  width: 160px;
+  flex-shrink: 0;
+  border-left: 1px solid #2A2820;
+  overflow-y: auto;
+  padding: 14px 14px;
+}
+
+.recipe-col-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-inv2);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #2A2820;
+}
+.recipe-ing-list { list-style: none; }
+.recipe-ing-list li {
+  font-size: 12px;
+  color: var(--text-inv2);
+  padding: 5px 0;
+  border-bottom: 1px solid #252320;
+  line-height: 1.4;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.recipe-ing-list li:last-child { border: none; }
+.recipe-ing-list li::before { content: '·'; color: var(--gold); flex-shrink: 0; font-size: 10px; }
+
+.recipe-steps-list { list-style: none; counter-reset: steps; }
+.recipe-steps-list li {
+  font-size: 12.5px;
+  color: var(--text-inv2);
+  padding: 8px 0 8px 30px;
+  border-bottom: 1px solid #252320;
+  position: relative;
+  line-height: 1.65;
+  counter-increment: steps;
+}
+.recipe-steps-list li:last-child { border: none; }
+.recipe-steps-list li::before {
+  content: counter(steps);
+  position: absolute;
+  left: 0; top: 8px;
+  width: 20px; height: 20px;
+  background: #252320;
+  border: 1px solid #353330;
+  color: var(--gold-light);
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--serif);
+}
+
+/* Nutrition panel on back */
+.nut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid #252320;
+}
+.nut-row:last-child { border: none; }
+.nut-row.major .nt-l { font-size: 12px; font-weight: 600; color: var(--text-inv); }
+.nut-row.major .nt-v { font-family: var(--serif); font-size: 16px; color: var(--text-inv); }
+.nut-row.minor .nt-l { font-size: 11px; color: var(--text-inv2); padding-left: 8px; }
+.nut-row.minor .nt-v { font-size: 12px; color: var(--text-inv2); }
+.nt-unit { font-size: 9px; color: var(--text-inv2); margin-left: 1px; }
+
+.macro-bar-mini { margin-top: 12px; padding-top: 10px; border-top: 1px solid #2A2820; }
+.mb-row { margin-bottom: 7px; }
+.mb-label { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-inv2); margin-bottom: 3px; }
+.mb-track { height: 3px; background: #2A2820; border-radius: 2px; overflow: hidden; }
+.mb-fill { height: 100%; border-radius: 2px; }
+.mb-fill.p { background: #6AAD7A; }
+.mb-fill.c { background: #5A9ABE; }
+.mb-fill.f { background: #C4726A; }
+
+.src-link-back {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 12px; padding: 8px 10px;
+  background: #252320; border-radius: 8px;
+  text-decoration: none; font-size: 11px;
+  color: var(--text-inv2); transition: all .15s;
+  cursor: pointer;
+}
+a.src-link-back:hover { background: #303028; color: var(--gold-light); }
+
+
+/* ─── Instacart integration ───────────────────────────────────────────────── */
+.ic-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #003D29;
+  color: #43A86B;
+  border: 1px solid #1A5C3A;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all .2s;
+  width: 100%;
+  justify-content: center;
+  letter-spacing: 0.3px;
+}
+.ic-btn:hover { background: #004D34; border-color: #43A86B; color: #6CCBA0; }
+.ic-btn:disabled { opacity: .5; cursor: not-allowed; }
+.ic-btn .ic-logo { font-size: 14px; }
+
+.ic-meal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #003D29;
+  color: #43A86B;
+  border: 1px solid #1A5C3A;
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all .18s;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.ic-meal-btn:hover { background: #004D34; color: #6CCBA0; }
+
+.ic-spinner {
+  width: 12px; height: 12px;
+  border: 1.5px solid rgba(67,168,107,.3);
+  border-top-color: #43A86B;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  flex-shrink: 0;
+}
+
+.ic-link-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  background: #001A0F;
+  border: 1px solid #1A5C3A;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #43A86B;
+  margin-top: 6px;
+}
+.ic-link-result a { color: #6CCBA0; text-decoration: none; font-weight: 600; }
+.ic-link-result a:hover { text-decoration: underline; }
+.ic-link-copy {
+  background: #1A5C3A;
+  border: none;
+  color: #43A86B;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: all .15s;
+}
+.ic-link-copy:hover { background: #43A86B; color: #001A0F; }
+.ic-status-msg {
+  font-size: 11px;
+  padding: 6px 0;
+  text-align: center;
+}
+.ic-status-msg.ok { color: #43A86B; }
+.ic-status-msg.err { color: var(--rose-light); }
+.ic-status-msg.loading { color: var(--text-inv2); display: flex; align-items: center; justify-content: center; gap: 6px; }
+
+/* Instacart button on the big card back */
+.ic-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: #002018;
+  border: 1px solid #1A5C3A;
+  border-radius: 8px;
+  color: #43A86B;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: all .18s;
+  text-decoration: none;
+  width: 100%;
+  justify-content: center;
+}
+.ic-back-btn:hover { background: #003020; border-color: #43A86B; color: #6CCBA0; }
+.ic-back-btn.loading { opacity: .7; cursor: wait; }
+
+/* ─── Grocery panel ───────────────────────────────────── */
+.grocery-drawer {
+  position: fixed;
+  right: 0; top: 54px; bottom: 0;
+  width: 280px;
+  background: var(--card-bg);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: -8px 0 30px rgba(0,0,0,.08);
+  transform: translateX(100%);
+  transition: transform .35s cubic-bezier(.4,0,.2,1);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+}
+.grocery-drawer.open { transform: translateX(0); }
+.grocery-drawer-header {
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.grocery-drawer-header h2 { font-family: var(--serif); font-size: 18px; font-weight: 400; }
+.gdclose { background: none; border: none; color: var(--text3); font-size: 16px; cursor: pointer; }
+.gdclose:hover { color: var(--text); }
+.grocery-body { flex: 1; overflow-y: auto; padding: 14px 18px; }
+.g-cat { margin-bottom: 18px; }
+.g-cat h4 { font-size: 9px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text3); margin-bottom: 7px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
+.g-item { display: flex; align-items: flex-start; gap: 7px; padding: 4px 0; font-size: 12px; color: var(--text2); line-height: 1.4; }
+.g-item input[type=checkbox] { accent-color: var(--gold); margin-top: 2px; flex-shrink: 0; }
+.g-item input:checked + label { text-decoration: line-through; color: var(--text3); }
+.grocery-footer { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 7px; flex-shrink: 0; }
+.store-btn { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 9px 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-family: var(--sans); font-size: 12px; color: var(--text2); transition: all .15s; }
+.store-btn:hover { border-color: var(--gold); color: var(--gold); }
+.store-btn .sn { font-weight: 500; font-size: 13px; }
+.store-btn .ss { font-size: 10px; color: var(--text3); display: block; }
+
+/* Gen overlay */
+#gen-overlay { display: none; position: fixed; inset: 0; background: rgba(28,26,22,.8); z-index: 200; align-items: center; justify-content: center; flex-direction: column; gap: 14px; backdrop-filter: blur(8px); }
+#gen-overlay.active { display: flex; }
+.gen-spinner { width: 36px; height: 36px; border: 2px solid #3A3830; border-top-color: var(--gold); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.gen-text { font-family: var(--serif); font-size: 20px; color: var(--text-inv); font-style: italic; }
+
+/* Toast */
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg); padding: 9px 20px; border-radius: 24px; font-size: 12px; font-weight: 500; opacity: 0; transition: all .3s; pointer-events: none; z-index: 300; white-space: nowrap; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Nouri<em>sh</em></div>
+  <div class="header-actions">
+    <span class="week-tag" id="week-tag"></span>
+    <span id="gh-sync-status" style="font-size:11px;color:#6AAD7A;display:none">✓ Saved to GitHub</span>
+    <button class="hbtn" id="gh-btn" onclick="openGithubPanel()" title="GitHub sync settings">⬡ GitHub</button>
+    <button class="hbtn" onclick="exportToExcel()">↓ Export</button>
+    <button class="hbtn" onclick="clearAll()">Clear</button>
+    <button class="hbtn primary" onclick="planningComplete()">Done — get grocery list</button>
+  </div>
+</header>
+
+<div id="api-strip">
+  <label>ANTHROPIC</label>
+  <input type="password" id="api-key" placeholder="sk-ant-api03-…" autocomplete="off">
+  <button class="api-save" onclick="saveKey()">Save</button>
+  <span id="api-status"></span>
+  <div style="width:1px;background:#3A3730;height:18px;margin:0 6px;flex-shrink:0"></div>
+  <label style="color:#43A86B">INSTACART</label>
+  <input type="password" id="ic-key" placeholder="Instacart API key…" autocomplete="off" style="max-width:260px">
+  <button class="api-save" onclick="saveIcKey()">Save</button>
+  <span id="ic-status"></span>
+  <a href="https://www.instacart.com/company/business/developers" target="_blank" style="font-size:10px;color:#3A6B50;margin-left:4px;text-decoration:none;white-space:nowrap">Get key →</a>
+</div>
+
+<div class="main-body">
+  <div class="calendar-area" id="calendar-area"></div>
+</div>
+
+<!-- Carousel drawer -->
+<div class="carousel-drawer" id="carousel-drawer">
+  <div class="drawer-header">
+    <div>
+      <div class="drawer-title" id="drawer-title">Choose a meal</div>
+      <div class="drawer-sub" id="drawer-sub"></div>
+    </div>
+    <div class="drawer-actions">
+      <input class="drawer-search" type="text" id="drawer-search" placeholder="Search…" oninput="filterCarousel()">
+      <button class="drawer-close" onclick="closeCarousel()">✕</button>
+    </div>
+  </div>
+  <div class="drawer-tabs" id="drawer-tabs"></div>
+  <div class="carousel-track-wrap">
+    <button class="carousel-nav prev" onclick="scrollCarousel(-1)">‹</button>
+    <div class="carousel-track" id="carousel-track"></div>
+    <button class="carousel-nav next" onclick="scrollCarousel(1)">›</button>
+  </div>
+</div>
+
+<!-- Grocery side panel -->
+<div class="grocery-drawer" id="grocery-drawer">
+  <div class="grocery-drawer-header">
+    <h2>Grocery list</h2>
+    <button class="gdclose" onclick="closeGrocery()">✕</button>
+  </div>
+  <div class="grocery-body" id="grocery-body"></div>
+  <div class="grocery-footer" id="grocery-footer"></div>
+</div>
+
+<div id="gen-overlay">
+  <div class="gen-spinner"></div>
+  <div class="gen-text">Building your grocery list…</div>
+</div>
+
+
+<!-- Big Card Flip Overlay -->
+
+<!-- GitHub Panel -->
+<div class="gh-panel" id="gh-panel">
+  <div class="gh-panel-title">GitHub sync</div>
+  <div class="gh-panel-sub">Your plans save automatically to your repo after each "Planning complete"</div>
+
+  <div class="gh-field">
+    <label>GitHub username</label>
+    <input type="text" id="gh-user" placeholder="yourusername" autocomplete="off">
+  </div>
+  <div class="gh-field">
+    <label>Repository name</label>
+    <input type="text" id="gh-repo" placeholder="nourish" autocomplete="off">
+  </div>
+  <div class="gh-field">
+    <label>Personal access token <a href="https://github.com/settings/tokens/new?scopes=repo&description=Nourish+App" target="_blank" class="gh-link">(create one →)</a></label>
+    <input type="password" id="gh-token" placeholder="ghp_…" autocomplete="off">
+  </div>
+
+  <button class="gh-save-btn" onclick="saveGithubSettings()">Save &amp; connect</button>
+  <div class="gh-status" id="gh-status"></div>
+
+  <div class="gh-divider"></div>
+  <div style="font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text3);margin-bottom:8px">Saved weeks</div>
+  <div id="gh-history-list" style="font-size:12px;color:var(--text3)">Connect to see history</div>
+</div>
+
+<div class="bigcard-overlay" id="bigcard-overlay" onclick="handleBigCardOverlayClick(event)">
+  <div class="bigcard-scene">
+    <div class="bigcard-flipper" id="bigcard-flipper">
+
+      <!-- FRONT -->
+      <div class="bigcard-face bigcard-front" id="bigcard-front" onclick="flipBigCard()">
+        <button class="bigcard-close" onclick="closeBigCard(event)">✕</button>
+        <div class="bigcard-front-inner">
+          <div class="bigcard-meal-type" id="bc-type"></div>
+          <div class="bigcard-meal-name" id="bc-name"></div>
+          <div class="bigcard-meal-note" id="bc-note"></div>
+          <div class="bigcard-front-macros" id="bc-macros"></div>
+          <div class="bigcard-flip-cta">
+            <div class="cta-icon">↩</div>
+            <span>Flip for recipe &amp; nutrition</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- BACK -->
+      <div class="bigcard-face bigcard-back" id="bigcard-back">
+        <div class="bigcard-back-header">
+          <div>
+            <div class="bigcard-back-title" id="bc-back-title"></div>
+            <div class="bigcard-back-subtitle" id="bc-back-sub"></div>
+          </div>
+          <button class="bigcard-back-close" onclick="closeBigCard(event)">✕</button>
+        </div>
+        <div class="bigcard-back-body">
+          <div class="recipe-col-ingredients">
+            <div class="recipe-col-label">Ingredients</div>
+            <ul class="recipe-ing-list" id="bc-ingredients"></ul>
+          </div>
+          <div class="recipe-col-steps">
+            <div class="recipe-col-label">Method</div>
+            <ol class="recipe-steps-list" id="bc-steps"></ol>
+          </div>
+          <div class="recipe-col-nutrition">
+            <div class="recipe-col-label">Nutrition</div>
+            <div id="bc-nutrition"></div>
+            <div class="macro-bar-mini" id="bc-macro-bars"></div>
+            <div id="bc-src-link"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+<!-- Add Custom Meal Overlay -->
+<div id="add-meal-overlay" style="position:fixed;inset:0;background:rgba(28,26,22,.75);z-index:300;align-items:center;justify-content:center;backdrop-filter:blur(8px)" class="">
+  <div style="background:var(--card-bg);border:1px solid var(--border-strong);border-radius:18px;width:min(520px,92vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.4)">
+    <div style="padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div>
+        <div style="font-family:var(--serif);font-size:20px;font-weight:400;color:var(--text)">Add a new meal</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:3px">It'll appear in your carousel going forward</div>
+      </div>
+      <button onclick="closeAddMealForm()" style="background:var(--surface);border:1px solid var(--border);color:var(--text2);width:28px;height:28px;border-radius:50%;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s">✕</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:20px 24px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+        <div style="grid-column:1/-1">
+          <label style="font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text3);display:block;margin-bottom:6px">Meal name *</label>
+          <input id="cm-name" type="text" placeholder="e.g. Mango Chicken Salad" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:var(--sans);font-size:14px;color:var(--text);outline:none;transition:border-color .15s" onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text3);display:block;margin-bottom:6px">Meal type</label>
+          <select id="cm-type" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:var(--sans);font-size:14px;color:var(--text);outline:none">
+            <option value="breakfast">Breakfast</option>
+            <option value="lunch">Lunch</option>
+            <option value="snack">Snack</option>
+            <option value="dinner">Dinner</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text3);display:block;margin-bottom:6px">Calories</label>
+          <input id="cm-cal" type="number" placeholder="450" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:var(--sans);font-size:14px;color:var(--text);outline:none;transition:border-color .15s" onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text3);display:block;margin-bottom:6px">Protein (g)</label>
+          <input id="cm-protein" type="number" placeholder="30" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:var(--sans);font-size:14px;color:var(--text);outline:none;transition:border-color .15s" onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text3);display:block;margin-bottom:6px">Carbs (g)</label>
+          <input id="cm-carbs" type="number" placeholder="40" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:var(--sans);font-size:14px;color:var(--text);outline:none;transition:border-color .15s" onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text3);display:block;margin-bottom:6px">Fat (g)</label>
+          <input id="cm-fat" type="number" placeholder="18" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:var(--sans);font-size:14px;color:var(--text);outline:none;transition:border-color .15s" onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+        <div style="grid-column:1/-1">
+          <label style="font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text3);display:block;margin-bottom:6px">Short description</label>
+          <input id="cm-note" type="text" placeholder="e.g. Grilled mango chicken, mixed greens, lime dressing" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:var(--sans);font-size:14px;color:var(--text);outline:none;transition:border-color .15s" onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+        <div style="grid-column:1/-1">
+          <label style="font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text3);display:block;margin-bottom:6px">Ingredients <span style="font-weight:400;text-transform:none;letter-spacing:0">(one per line)</span></label>
+          <textarea id="cm-ingredients" rows="5" placeholder="2 cups cooked rice
+150g chicken breast
+1 mango (diced)
+2 tbsp lime dressing" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:var(--sans);font-size:13px;color:var(--text);outline:none;resize:vertical;transition:border-color .15s;line-height:1.6" onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+        </div>
+        <div style="grid-column:1/-1">
+          <label style="font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text3);display:block;margin-bottom:6px">Cooking steps <span style="font-weight:400;text-transform:none;letter-spacing:0">(one per line, optional)</span></label>
+          <textarea id="cm-steps" rows="4" placeholder="Grill chicken 5 min per side.
+Dice mango and mix greens.
+Slice chicken, assemble bowl, drizzle dressing." style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:var(--sans);font-size:13px;color:var(--text);outline:none;resize:vertical;transition:border-color .15s;line-height:1.6" onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+        </div>
+      </div>
+      <div id="cm-error" style="color:var(--rose-light);font-size:12px;margin-bottom:10px"></div>
+    </div>
+    <div style="padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:10px;flex-shrink:0">
+      <button onclick="closeAddMealForm()" style="flex:1;background:transparent;border:1px solid var(--border);color:var(--text2);font-family:var(--sans);font-size:13px;padding:10px;border-radius:8px;cursor:pointer">Cancel</button>
+      <button onclick="submitCustomMeal()" style="flex:2;background:var(--text);color:var(--bg);font-family:var(--sans);font-size:13px;font-weight:600;padding:10px;border-radius:8px;cursor:pointer;border:none;transition:opacity .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">Save meal to library</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Config loader: reads config.js (gitignored) and pre-fills all API keys ──
+(function loadConfig() {
+  var s = document.createElement('script');
+  s.src = 'config.js';
+  s.onload = function() {
+    var cfg = window.NOURISH_CONFIG || {};
+    if (cfg.anthropicKey) localStorage.setItem('nk',       cfg.anthropicKey);
+    if (cfg.instacartKey) localStorage.setItem('ic_key',   cfg.instacartKey);
+    if (cfg.githubToken)  localStorage.setItem('gh_token', cfg.githubToken);
+    if (cfg.githubUser)   localStorage.setItem('gh_user',  cfg.githubUser);
+    if (cfg.githubRepo)   localStorage.setItem('gh_repo',  cfg.githubRepo);
+  };
+  s.onerror = function() { /* config.js absent — fine, use localStorage */ };
+  document.head.appendChild(s);
+})();
+</script>
+
+<script>
+// ══════════════════════════════════════════════════════
+// MEAL DATABASE
+// ══════════════════════════════════════════════════════
+const MEALS = {
+ breakfast: [
+  { id:'b1', name:'Soaked Oats', cal:380, tags:['chef','veggie'], note:'Oats, chia, flax, hemp, banana, walnuts, almond milk', src:"Chef D'ole", srcType:'chef', page:'Recipe #5', serving:'1 jar',
+    ingredients:['¼ cup almond milk','¼ cup rolled oats','1 tsp chia seeds','1 tsp flaxseed','1 tsp hemp seeds','handful walnuts (crushed)','½ banana (chopped)','pinch cinnamon','1 scoop protein powder (optional, morning)'],
+    steps:['Add almond milk to a Bali glass container.','Add rolled oats, chia, flaxseed and hemp seeds. Mix.','Add banana and walnuts. Sprinkle cinnamon.','Seal and refrigerate overnight. Add protein powder in the morning if desired.'],
+    nutrition:{protein:12,carbs:52,fat:10,fiber:8,sugar:14,sodium:80,cholesterol:0} },
+  { id:'b2', name:'Banana Nut Protein Muffins ×2', cal:268, tags:['chef'], note:'Rolled oats, whey protein, banana, Greek yogurt, blueberries', src:"Chef D'ole", srcType:'chef', page:'Recipe #2', serving:'2 muffins',
+    ingredients:['2 cups rolled oats','2 scoops vanilla whey protein','2 bananas','2 eggs','1 cup Greek yogurt','1 cup blueberries','2 tsp baking powder','3 tbsp agave','20 drops stevia'],
+    steps:['Preheat oven to 400°F. Grease muffin tray with avocado oil.','Grind oats in blender to flour. Add all ingredients and blend smooth.','Pour to ¾ level in cups. Add blueberries on top.','Bake 15 min. Cool and refrigerate up to 5 days.'],
+    nutrition:{protein:20,carbs:38,fat:5,fiber:4,sugar:16,sodium:120,cholesterol:40} },
+  { id:'b3', name:'Savoury Veg Muffins ×2', cal:174, tags:['chef','veggie','lowcarb'], note:'Zucchini, carrot, radish, almond & coconut flour', src:"Chef D'ole", srcType:'chef', page:'Recipe #1', serving:'2 muffins',
+    ingredients:['1 zucchini (grated, squeezed)','1 carrot (grated)','1 small radish (grated)','chopped green onion, onion, jalapeños','salt, pepper, garlic & onion powder','½ cup almond flour','½ cup coconut flour','2 tsp baking powder','½ cup almond milk','3 tbsp butter (melted)','2 eggs'],
+    steps:['Grate and squeeze veggies dry. Mix with onions and seasoning — taste strong.','Whisk wet ingredients separately. Mix dry ingredients separately.','Combine everything. Grease muffin tray with avocado oil, fill ¾.','Bake 350°F for 20 min until golden.'],
+    nutrition:{protein:9,carbs:14,fat:12,fiber:5,sugar:2,sodium:80,cholesterol:70} },
+  { id:'b4', name:'Wow Protein Pancakes ×4', cal:256, tags:['chef'], note:'Cottage cheese, egg white, coconut flour, blueberries', src:"Chef D'ole", srcType:'chef', page:'Recipe #6', serving:'4 pancakes',
+    ingredients:['2 cups cottage cheese (no-salt)','½ cup egg white','1 cup coconut flour','1 tsp vanilla','2 tsp baking powder','1 cup blueberries'],
+    steps:['Heat electric griddle to 250°F.','Blend cottage cheese, egg white, flour, vanilla and baking powder until thick.','Fold in blueberries. Pour half-spatula rounds onto griddle.','Cook until edges set (~3 min), flip, cook 2 more min. Makes ~16 pancakes.'],
+    nutrition:{protein:18,carbs:24,fat:8,fiber:6,sugar:6,sodium:130,cholesterol:10} },
+  { id:'b5', name:'Chobani Bowl', cal:390, tags:['veggie'], note:'Full-fat Chobani, blueberries, keto granola', src:'Quick', srcType:'simple', serving:'1 bowl',
+    ingredients:['1 cup plain full-fat Chobani','1 cup blueberries','¼ cup keto granola'],
+    steps:['Spoon yogurt into bowl. Top with blueberries and granola. Serve immediately.'],
+    nutrition:{protein:25,carbs:33,fat:19,fiber:3,sugar:22,sodium:90,cholesterol:30} },
+  { id:'b6', name:'Veggie Omelette', cal:220, tags:['veggie','lowcarb'], note:'2 eggs, bell pepper, onion, spinach', src:'Quick', srcType:'simple', serving:'1 omelette',
+    ingredients:['2 eggs','¼ cup diced bell pepper','¼ cup diced onion','handful spinach','olive oil','salt, pepper'],
+    steps:['Whisk eggs with salt and pepper. Sauté veggies 2 min. Pour eggs over pan.','Cook until edges set, fold and slide onto plate.'],
+    nutrition:{protein:16,carbs:8,fat:12,fiber:2,sugar:3,sodium:160,cholesterol:370} },
+  { id:'b7', name:'Blueberry Scones ×2', cal:452, tags:['chef','veggie'], note:'Almond flour, coconut flour, frozen blueberries', src:"Chef D'ole", srcType:'chef', page:'Recipe #3', serving:'2 scones',
+    ingredients:['1½ cup almond flour','½ cup coconut flour','¼ cup Swerve sugar','1 tsp baking powder','1 egg','½ cup applesauce','2 tbsp butter','1 tsp vanilla','10 drops stevia','½ cup frozen blueberries'],
+    steps:['Preheat oven to 350°F. Mix dry and wet ingredients separately, then combine into dough.','Fold in blueberries. Press into ½-inch disk on parchment. Cut into 8 triangles.','Bake 20 min, separate, bake 20 more min. Cool before eating.'],
+    nutrition:{protein:16,carbs:24,fat:18,fiber:7,sugar:4,sodium:90,cholesterol:46} },
+  { id:'b8', name:'Avocado & Egg Toast', cal:310, tags:['veggie'], note:'GF bread, avocado, 2 poached eggs', src:'Quick', srcType:'simple', serving:'2 slices',
+    ingredients:['2 slices GF bread','1 ripe avocado','2 eggs','chilli flakes','lemon juice','salt, pepper'],
+    steps:['Toast bread. Mash avocado with lemon, salt and pepper.','Poach eggs 3–4 min. Spread avocado, top with eggs and chilli.'],
+    nutrition:{protein:18,carbs:22,fat:16,fiber:7,sugar:2,sodium:220,cholesterol:370} },
+  { id:'b9', name:'Greek Yogurt Parfait', cal:320, tags:['veggie'], note:'Yogurt, mixed berries, granola, honey', src:'Quick', srcType:'simple', serving:'1 glass',
+    ingredients:['1 cup Greek yogurt','½ cup mixed berries','¼ cup granola','1 tsp honey'],
+    steps:['Layer yogurt and berries in a glass. Top with granola and honey.'],
+    nutrition:{protein:14,carbs:38,fat:8,fiber:4,sugar:24,sodium:70,cholesterol:15} },
+  { id:'b10', name:'Cloud Bread + Eggs', cal:270, tags:['chef','lowcarb'], note:'Egg white cloud bread with scrambled eggs', src:"Chef D'ole", srcType:'chef', page:'Recipe #7', serving:'3 breads + 2 eggs',
+    ingredients:['6 eggs (separated)','3 tsp cream cheese','2 tsp baking powder','2 eggs (for scrambling)','butter'],
+    steps:['Beat whites with baking powder to stiff peaks. Blend yolks with cream cheese.','Fold yolk mix into whites gently. Spoon circles onto oiled parchment.','Bake 300°F 25 min. Scramble 2 eggs in butter and serve together.'],
+    nutrition:{protein:18,carbs:6,fat:14,fiber:0,sugar:1,sodium:210,cholesterol:620} },
+ ],
+ lunch: [
+  { id:'l1', name:'Broccoli Chicken Bowl', cal:548, tags:['chicken'], note:'6 oz chicken, steamed broccoli, rice', src:'Quick', srcType:'simple', serving:'1 bowl',
+    ingredients:['6 oz chicken breast','1 cup broccoli florets','1 cup cooked rice','1 tbsp olive oil','salt, pepper, garlic powder'],
+    steps:['Season and pan-cook chicken 5–6 min per side. Slice.','Steam broccoli 4 min. Serve over rice with olive oil.'],
+    nutrition:{protein:50,carbs:74,fat:7,fiber:4,sugar:2,sodium:180,cholesterol:120} },
+  { id:'l2', name:'Healthy Salad', cal:108, tags:['veggie','lowcarb'], note:'Mixed greens, olive oil, red wine vinegar', src:'Quick', srcType:'simple', serving:'1 bowl',
+    ingredients:['3 cups mixed greens','½ cup cherry tomatoes','½ cup cucumber','1 tbsp olive oil','1 tsp red wine vinegar','salt, pepper'],
+    steps:['Toss all ingredients. Season and serve immediately.'],
+    nutrition:{protein:2,carbs:6,fat:9,fiber:3,sugar:3,sodium:40,cholesterol:0} },
+  { id:'l3', name:'Apple + Almond Butter', cal:290, tags:['veggie'], note:'1 medium apple, 2 tbsp almond butter', src:'Quick', srcType:'simple', serving:'1 apple',
+    ingredients:['1 medium apple','2 tbsp natural almond butter'],
+    steps:['Slice apple. Serve with almond butter for dipping.'],
+    nutrition:{protein:6,carbs:34,fat:18,fiber:5,sugar:22,sodium:30,cholesterol:0} },
+  { id:'l4', name:'Turkey Sandwich', cal:420, tags:['turkey'], note:'Turkey, mustard, veggies on GF bread', src:'Quick', srcType:'simple', serving:'1 sandwich',
+    ingredients:['2 slices GF bread','4 oz turkey slices','1 tbsp mustard','lettuce, tomato, cucumber'],
+    steps:['Toast bread if preferred. Layer mustard, turkey and veggies. Serve.'],
+    nutrition:{protein:28,carbs:36,fat:8,fiber:3,sugar:4,sodium:680,cholesterol:65} },
+  { id:'l5', name:'Café Yumm Bowl', cal:480, tags:['veggie'], note:'Brown rice, black beans, roasted veggies, Yumm sauce', src:'Café Yumm', srcType:'web', url:'https://cafeyumm.com', serving:'1 bowl',
+    ingredients:['1 cup brown rice','½ cup black beans','½ cup roasted veggies','2 tbsp Yumm sauce','1 tbsp sour cream','salsa'],
+    steps:['Warm rice and beans. Arrange in bowl with veggies.','Top with Yumm sauce, sour cream and salsa.'],
+    nutrition:{protein:16,carbs:68,fat:10,fiber:10,sugar:6,sodium:380,cholesterol:10} },
+  { id:'l6', name:'Chicken Quesadilla', cal:520, tags:['chicken'], note:'GF tortilla, chicken, cheese, salsa', src:'Quick', srcType:'simple', serving:'1 quesadilla',
+    ingredients:['1 GF tortilla','4 oz cooked chicken (shredded)','2 tbsp shredded cheese','2 tbsp salsa','1 tbsp Greek yogurt'],
+    steps:['Layer chicken and cheese on half the tortilla. Fold. Cook 2–3 min per side until golden.','Serve with salsa and yogurt.'],
+    nutrition:{protein:34,carbs:28,fat:16,fiber:2,sugar:2,sodium:420,cholesterol:85} },
+  { id:'l7', name:'Chipotle-style Bowl', cal:550, tags:['chicken'], note:'Chicken, cilantro rice, beans, guacamole', src:'Quick', srcType:'simple', serving:'1 bowl',
+    ingredients:['4 oz grilled chicken','½ cup cilantro lime rice','¼ cup black beans','2 tbsp guacamole','2 tbsp salsa','shredded cheese'],
+    steps:['Cook chicken. Mix rice with cilantro and lime.','Build bowl: rice, beans, chicken, then guac, salsa, cheese.'],
+    nutrition:{protein:36,carbs:50,fat:18,fiber:7,sugar:4,sodium:460,cholesterol:80} },
+  { id:'l8', name:'Turkey Burger', cal:480, tags:['turkey'], note:'Turkey patty, GF bun, avocado', src:'Quick', srcType:'simple', serving:'1 burger',
+    ingredients:['5 oz ground turkey','1 GF bun','½ avocado','lettuce, tomato','1 tbsp mustard','salt, garlic powder'],
+    steps:['Season turkey, form patty. Cook 5 min per side. Toast bun.','Assemble with avocado, lettuce, tomato and mustard.'],
+    nutrition:{protein:32,carbs:30,fat:18,fiber:5,sugar:3,sodium:380,cholesterol:90} },
+  { id:'l9', name:'Rice Noodle Stir-fry', cal:460, tags:['veggie'], note:'Rice noodles, veggies, soy-ginger sauce', src:'YouTube · Gordon Ramsay', srcType:'youtube', url:'https://www.youtube.com/results?search_query=gordon+ramsay+noodle+stir+fry', serving:'1 plate',
+    ingredients:['100g rice noodles','1 cup mixed veggies (pepper, snap peas, carrot)','2 cloves garlic','1 tsp ginger','1 tbsp soy sauce','1 tsp sesame oil'],
+    steps:['Soak noodles 5 min in boiling water. Drain.','Stir-fry garlic and ginger, add veggies 3–4 min. Add noodles, soy, sesame. Toss and serve.'],
+    nutrition:{protein:12,carbs:58,fat:10,fiber:5,sugar:5,sodium:540,cholesterol:0} },
+  { id:'l10', name:'Potstickers + Edamame', cal:380, tags:['veggie'], note:'Steamed dumplings, edamame, soy dipping sauce', src:'Quick', srcType:'simple', serving:'6 dumplings',
+    ingredients:['6 vegetable potstickers (frozen)','1 cup shelled edamame','2 tbsp soy sauce','1 tsp rice vinegar','½ tsp sesame oil'],
+    steps:['Cook potstickers per package. Boil edamame 3 min.','Mix dipping sauce. Serve together.'],
+    nutrition:{protein:18,carbs:42,fat:8,fiber:7,sugar:4,sodium:600,cholesterol:20} },
+  { id:'l11', name:'Tuna Lettuce Wraps', cal:290, tags:['fish','lowcarb'], note:'Tuna, avocado mayo, celery in butter lettuce', src:'Quick', srcType:'simple', serving:'3–4 wraps',
+    ingredients:['1 can tuna (drained)','1 tbsp avocado mayo','1 celery stalk (diced)','¼ onion (diced)','butter lettuce leaves','lemon juice'],
+    steps:['Mix tuna with mayo, celery, onion and lemon. Season.','Spoon into lettuce cups and serve.'],
+    nutrition:{protein:28,carbs:8,fat:10,fiber:2,sugar:2,sodium:340,cholesterol:45} },
+  { id:'l12', name:'Pesto Pasta (GF)', cal:510, tags:['veggie'], note:'GF pasta, pesto, cherry tomatoes, parmesan', src:'Quick', srcType:'simple', serving:'1 bowl',
+    ingredients:['2 oz GF pasta','2 tbsp basil pesto','½ cup cherry tomatoes (halved)','1 tbsp parmesan','olive oil drizzle'],
+    steps:['Cook pasta. Reserve ¼ cup pasta water. Drain.','Toss with pesto and pasta water. Add tomatoes and parmesan.'],
+    nutrition:{protein:18,carbs:62,fat:14,fiber:4,sugar:5,sodium:380,cholesterol:8} },
+ ],
+ snack: [
+  { id:'s1', name:'Apple + Almond Butter', cal:290, tags:['veggie'], note:'1 apple, 2 tbsp almond butter', src:'Quick', srcType:'simple', serving:'1 apple', ingredients:['1 medium apple','2 tbsp almond butter'], steps:['Slice and dip.'], nutrition:{protein:6,carbs:34,fat:18,fiber:5,sugar:22,sodium:30,cholesterol:0} },
+  { id:'s2', name:'Chobani + Blueberries', cal:200, tags:['veggie'], note:'½ cup Chobani, ½ cup blueberries', src:'Quick', srcType:'simple', serving:'½ cup', ingredients:['½ cup Chobani Greek yogurt','½ cup blueberries'], steps:['Top yogurt with berries.'], nutrition:{protein:12,carbs:18,fat:4,fiber:2,sugar:14,sodium:45,cholesterol:15} },
+  { id:'s3', name:'Protein Muffin', cal:134, tags:['chef'], note:'1 Banana Nut Protein Muffin from batch', src:"Chef D'ole", srcType:'chef', page:'Recipe #2', serving:'1 muffin', ingredients:['(From pre-made batch — see Recipe #2)'], steps:['Grab from batch. Enjoy at room temp or warm 20 sec in microwave.'], nutrition:{protein:10,carbs:19,fat:2,fiber:2,sugar:8,sodium:60,cholesterol:20} },
+  { id:'s4', name:'Walnuts + Fruit', cal:220, tags:['veggie','lowcarb'], note:'¼ cup walnuts, 1 piece seasonal fruit', src:'Quick', srcType:'simple', serving:'¼ cup + fruit', ingredients:['¼ cup walnuts','1 piece fruit'], steps:['Portion and enjoy.'], nutrition:{protein:6,carbs:18,fat:16,fiber:4,sugar:10,sodium:1,cholesterol:0} },
+  { id:'s5', name:'Hummus + Veggie Sticks', cal:180, tags:['veggie'], note:'3 tbsp hummus, cucumber, carrot, bell pepper', src:'Quick', srcType:'simple', serving:'3 tbsp + veggies', ingredients:['3 tbsp hummus','cucumber sticks','carrot sticks','bell pepper strips'], steps:['Cut veggies. Serve with hummus.'], nutrition:{protein:6,carbs:18,fat:8,fiber:5,sugar:5,sodium:200,cholesterol:0} },
+  { id:'s6', name:'Spinach Protein Shake', cal:220, tags:['veggie'], note:'Spinach, banana, protein powder, almond milk', src:'Quick', srcType:'simple', serving:'1 large glass', ingredients:['1 cup spinach','1 banana (frozen)','1 scoop protein powder','1 cup almond milk'], steps:['Blend all until smooth. Add ice if desired.'], nutrition:{protein:18,carbs:28,fat:4,fiber:3,sugar:15,sodium:180,cholesterol:10} },
+  { id:'s7', name:'Rice Cakes + Almond Butter', cal:190, tags:['veggie'], note:'2 rice cakes, 1 tbsp almond butter', src:'Quick', srcType:'simple', serving:'2 rice cakes', ingredients:['2 plain rice cakes','1 tbsp almond butter'], steps:['Spread almond butter on rice cakes.'], nutrition:{protein:4,carbs:24,fat:6,fiber:1,sugar:2,sodium:60,cholesterol:0} },
+  { id:'s8', name:'Hard-boiled Eggs ×2', cal:140, tags:['lowcarb'], note:'2 eggs, salt & pepper', src:'Quick', srcType:'simple', serving:'2 eggs', ingredients:['2 eggs','salt, pepper'], steps:['Boil eggs 10–12 min. Ice bath 5 min. Peel and season.'], nutrition:{protein:12,carbs:2,fat:10,fiber:0,sugar:1,sodium:140,cholesterol:370} },
+  { id:'s9', name:'Keto Granola Bar', cal:210, tags:['lowcarb'], note:'Store-bought keto bar', src:'Quick', srcType:'simple', serving:'1 bar', ingredients:['1 keto-friendly bar (RX Bar or similar)'], steps:['Open and enjoy.'], nutrition:{protein:6,carbs:18,fat:12,fiber:4,sugar:5,sodium:90,cholesterol:0} },
+  { id:'s10', name:'Cottage Cheese + Pineapple', cal:180, tags:['veggie'], note:'½ cup cottage cheese, pineapple chunks', src:'Quick', srcType:'simple', serving:'½ cup', ingredients:['½ cup small-curd cottage cheese','½ cup pineapple chunks'], steps:['Top cottage cheese with pineapple. Serve chilled.'], nutrition:{protein:14,carbs:22,fat:2,fiber:1,sugar:18,sodium:290,cholesterol:10} },
+ ],
+ dinner: [
+  { id:'d1', name:'Honey Garlic Chicken + Quinoa', cal:580, tags:['chicken'], note:'Chicken, quinoa, broccoli, honey-garlic glaze', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=honey+garlic+chicken+quinoa', serving:'1 plate', ingredients:['150g chicken breast','¾ cup dry quinoa','1 cup broccoli','2 tbsp honey','3 cloves garlic','1 tbsp soy sauce'], steps:['Cook quinoa. Steam broccoli. Mix honey, garlic and soy.','Sear chicken 5 min per side. Pour sauce over, glaze 2 min. Slice and serve.'], nutrition:{protein:32,carbs:60,fat:18,fiber:6,sugar:14,sodium:380,cholesterol:75} },
+  { id:'d2', name:'Shawarma Chicken Plate', cal:600, tags:['chicken'], note:'Spiced chicken, hummus, tzatziki, Greek salad', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=shawarma+chicken+plate', serving:'1 plate', ingredients:['120g chicken thigh','1 tsp shawarma spice mix','3 tbsp hummus','2 tbsp tzatziki','1 cup Greek salad'], steps:['Marinate chicken in spices and olive oil. Grill 5–6 min per side.','Slice and serve with hummus, tzatziki and salad.'], nutrition:{protein:30,carbs:50,fat:25,fiber:5,sugar:6,sodium:440,cholesterol:90} },
+  { id:'d3', name:'Indian Chicken Curry + Rice', cal:670, tags:['chicken','indian'], note:'Tomato-onion curry, basmati rice, kachumber', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=indian+chicken+curry', serving:'1 bowl', ingredients:['150g chicken','½ cup basmati rice','1 onion','2 tomatoes (pureed)','ginger-garlic paste','garam masala, cumin, turmeric, chilli'], steps:['Sauté onion golden. Add ginger-garlic, spices, tomato. Cook 5 min.','Add chicken and water. Simmer 20 min. Serve over rice with kachumber.'], nutrition:{protein:34,carbs:80,fat:22,fiber:5,sugar:8,sodium:420,cholesterol:85} },
+  { id:'d4', name:'Chicken Kaathi Roll', cal:550, tags:['chicken','indian'], note:'Paratha wrap with grilled chicken and chutney', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=chicken+kathi+roll', serving:'1 roll', ingredients:['1 large paratha','120g grilled chicken','1 tbsp yogurt sauce (mint, cumin)','¼ cup sliced onion','chaat masala, lemon'], steps:['Grill and slice chicken. Warm paratha.','Spread yogurt sauce, layer chicken and onion. Sprinkle chaat masala and lemon. Roll tightly.'], nutrition:{protein:28,carbs:45,fat:25,fiber:3,sugar:4,sodium:480,cholesterol:80} },
+  { id:'d5', name:'Chicken Thai Curry', cal:600, tags:['chicken'], note:'Coconut milk curry, jasmine rice, Thai basil', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=thai+green+chicken+curry', serving:'1 bowl', ingredients:['150g chicken','¾ cup coconut milk','1 tbsp Thai green curry paste','½ cup jasmine rice','fish sauce, palm sugar','Thai basil'], steps:['Cook rice. Fry curry paste in oil 1 min. Add coconut milk, fish sauce, sugar.','Add chicken, simmer 12 min. Stir in basil. Serve over rice.'], nutrition:{protein:30,carbs:50,fat:25,fiber:2,sugar:8,sodium:540,cholesterol:80} },
+  { id:'d6', name:'Pecan-Crusted Chicken', cal:700, tags:['chicken'], note:'Pecan-crusted breast, mashed potatoes, salad', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=pecan+crusted+chicken', serving:'1 plate', ingredients:['150g chicken breast','2 tbsp crushed pecans','1 tbsp Dijon mustard','1 cup mashed potatoes','1 cup side salad'], steps:['Brush chicken with Dijon. Press pecans on both sides.','Bake 400°F for 22 min. Serve with mash and salad.'], nutrition:{protein:35,carbs:55,fat:35,fiber:4,sugar:4,sodium:380,cholesterol:95} },
+  { id:'d7', name:'Buffalo Chicken Bowl', cal:448, tags:['chicken','chef'], note:'Chicken thighs, rice, zucchini, mushrooms, buffalo sauce', src:"Chef D'ole", srcType:'chef', url:'https://www.youtube.com/watch?v=5qylcQJ03AA', serving:'1 of 10 servings', ingredients:['200g chicken thighs','chilli powder, salt, pepper','½ cup cooked rice','½ zucchini (diced)','60g mushrooms','¼ onion','1 tbsp cheddar','1 tbsp buffalo sauce'], steps:['Season chicken, bake 425°F 10 min then broil 5 min. Dice.','Sauté onion, zucchini, mushrooms. Mix with rice, chicken, cheese and buffalo sauce. Portion into 10 containers.'], nutrition:{protein:37,carbs:29,fat:21,fiber:3,sugar:4,sodium:520,cholesterol:95} },
+  { id:'d8', name:'Chipotle Chicken Bowl', cal:520, tags:['chicken','chef'], note:'Chipotle-marinated chicken, cilantro lime rice, corn salsa', src:"Chef D'ole", srcType:'chef', url:'https://www.youtube.com/shorts/HgwEsjrJSA4', serving:'1 bowl', ingredients:['150g chicken breast','chipotle peppers in adobo','1 tsp garlic & onion powder','cilantro lime rice','corn & black bean salsa'], steps:['Blend chipotle with oil and spices. Toss chicken in marinade.','Pan-cook chicken 3–4 min per side until charred. Serve over cilantro rice with salsa.'], nutrition:{protein:36,carbs:42,fat:14,fiber:5,sugar:6,sodium:560,cholesterol:80} },
+  { id:'d9', name:'Salmon + White Wine Sauce', cal:680, tags:['fish'], note:'Seared salmon, asparagus, wild rice', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=salmon+white+wine+sauce', serving:'1 plate', ingredients:['150g salmon fillet','1 cup asparagus','½ cup wild rice','¼ cup white wine','2 tbsp cream or yogurt','1 shallot','butter, dill, lemon'], steps:['Cook rice. Roast asparagus 400°F 12 min. Sear salmon 3 min per side.','In same pan: sauté shallot, add wine, reduce. Add cream/yogurt and butter. Drizzle over salmon.'], nutrition:{protein:38,carbs:50,fat:30,fiber:4,sugar:4,sodium:360,cholesterol:100} },
+  { id:'d10', name:'Shrimp + Cilantro Rice', cal:540, tags:['fish'], note:'Garlic butter shrimp, cilantro rice, asparagus', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=garlic+butter+shrimp+cilantro+rice', serving:'1 bowl', ingredients:['150g large shrimp','¾ cup cilantro lime rice','1 cup asparagus','2 tbsp butter','3 cloves garlic','lemon juice, cilantro'], steps:['Roast asparagus. Make cilantro rice. Sauté shrimp in butter 2 min per side. Add garlic last 30 sec. Serve over rice.'], nutrition:{protein:30,carbs:60,fat:15,fiber:4,sugar:3,sodium:480,cholesterol:190} },
+  { id:'d11', name:'Fish Tacos + Mango Salsa', cal:450, tags:['fish'], note:'White fish, corn tortillas, mango salsa', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=fish+tacos+mango+salsa', serving:'2 tacos', ingredients:['120g white fish (tilapia or cod)','2 corn tortillas','mango salsa (mango, red onion, jalapeño, lime, cilantro)','cabbage slaw','avocado crema'], steps:['Season and cook fish 10–12 min at 400°F until flakey.','Warm tortillas. Build tacos: fish, slaw, salsa, crema.'], nutrition:{protein:25,carbs:40,fat:18,fiber:5,sugar:12,sodium:380,cholesterol:55} },
+  { id:'d12', name:'Dijon-Glazed Salmon', cal:650, tags:['fish'], note:'Dijon-honey glaze, small potatoes, asparagus', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=dijon+glazed+salmon', serving:'1 plate', ingredients:['150g salmon','1 tbsp Dijon mustard','1 tsp honey','½ cup small potatoes','1 cup asparagus','rosemary, olive oil'], steps:['Roast potatoes 400°F 20 min. Mix Dijon and honey, brush on salmon.','Add asparagus and salmon to tray, roast 12–15 min. Serve together.'], nutrition:{protein:36,carbs:45,fat:28,fiber:5,sugar:6,sodium:420,cholesterol:95} },
+  { id:'d13', name:'Blackened Cod', cal:520, tags:['fish'], note:'Cajun-spiced cod, cauliflower, rice', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=blackened+cod', serving:'1 plate', ingredients:['150g cod fillet','2 tsp Cajun spice','1 cup cauliflower','½ cup cooked rice','olive oil, lemon'], steps:['Steam or roast cauliflower. Cook rice. Coat cod in spice and oil.','Sear cod in very hot cast iron 3–4 min per side until blackened. Serve with veg and lemon.'], nutrition:{protein:30,carbs:55,fat:15,fiber:5,sugar:3,sodium:460,cholesterol:70} },
+  { id:'d14', name:'Colombian Salmon + Quinoa', cal:700, tags:['fish'], note:'Spiced salmon, quinoa, asparagus', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=colombian+salmon', serving:'1 plate', ingredients:['150g salmon','¾ cup quinoa','1 cup asparagus','cumin, coriander, paprika, garlic powder','lime juice, olive oil'], steps:['Cook quinoa. Roast asparagus. Rub salmon with spice mix.','Pan-sear or bake salmon 12–15 min. Serve over quinoa with asparagus and lime.'], nutrition:{protein:38,carbs:55,fat:30,fiber:6,sugar:3,sodium:340,cholesterol:95} },
+  { id:'d15', name:'Turkey Chili + Salad', cal:500, tags:['turkey'], note:'Hearty turkey chili, mixed greens', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=healthy+turkey+chili', serving:'1 bowl + salad', ingredients:['150g minced turkey','1 cup canned tomatoes','½ cup kidney beans','1 onion, 2 cloves garlic','cumin, chilli powder, paprika'], steps:['Brown turkey with onion and garlic. Add spices, tomatoes and beans. Simmer 20 min. Serve with salad.'], nutrition:{protein:35,carbs:40,fat:20,fiber:10,sugar:8,sodium:480,cholesterol:80} },
+  { id:'d16', name:'Turkey Balls + Roasted Veg', cal:420, tags:['turkey','chef'], note:"Chef D'ole turkey balls with roasted seasonal veg", src:"Chef D'ole", srcType:'chef', page:'Recipe #4', serving:'6 balls + veg', ingredients:['200g minced turkey','1 small zucchini (grated, squeezed)','1 small radish (grated)','onions, jalapeños, seasoning','egg whites','seasonal roasting veg'], steps:['Mix turkey with squeezed veg, onions and seasoning — taste it strong. Add egg whites and mix with gloved hands.','Roll into balls, line on oiled foil trays. Bake 375°F 50 min, moving every 20 min.','Roast veg alongside. Serve together.'], nutrition:{protein:30,carbs:18,fat:14,fiber:4,sugar:4,sodium:340,cholesterol:75} },
+  { id:'d17', name:'Minced Turkey Bowl', cal:550, tags:['turkey'], note:'Minced turkey, rice, broccoli, soy-garlic sauce', src:'Quick', srcType:'simple', serving:'1 bowl', ingredients:['150g minced turkey','½ cup cooked rice','1 cup steamed broccoli','2 cloves garlic','1 tbsp soy sauce','1 tsp sesame oil'], steps:['Brown turkey with garlic. Add soy and sesame, cook 2 min. Serve over rice with broccoli.'], nutrition:{protein:30,carbs:60,fat:18,fiber:4,sugar:3,sodium:440,cholesterol:80} },
+  { id:'d18', name:'Seekh Kabab + Kachumber', cal:580, tags:['chef','indian'], note:'Ground lamb kabab, kachumber salad', src:"Chef D'ole", srcType:'chef', url:'https://www.youtube.com/watch?v=gxT7BV7IFi0', serving:'3–4 kababs + salad', ingredients:['200g ground lamb','1 onion (dried in cheesecloth)','2 tbsp ginger-garlic paste','½ cup coriander (chopped)','2 jalapeños','seekh kabab masala, chaat masala, garam masala, chilli'], steps:['Mix all ingredients. Refrigerate 2 hrs.','Wet hands, press meat around skewers. Grill 10–12 min turning until charred.','Serve with kachumber: diced tomato, cucumber, onion, lemon, coriander.'], nutrition:{protein:32,carbs:20,fat:28,fiber:3,sugar:5,sodium:600,cholesterol:90} },
+  { id:'d19', name:'Daal Makhni + Roti + Paneer', cal:700, tags:['indian','veggie'], note:'Black lentil curry, roti, fried paneer', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=daal+makhni', serving:'1 bowl + 1 roti', ingredients:['1 cup cooked urad daal','1 onion','2 tomatoes (pureed)','2 tbsp butter, 1 tbsp cream','ginger-garlic paste, garam masala, kashmiri chilli','1 roti','50g paneer (pan-fried)'], steps:['Sauté onion golden in butter. Add ginger-garlic and spices.','Add tomato, cook 5 min. Add lentils + water. Simmer 20 min. Stir in cream and butter.','Serve with warm roti and fried paneer.'], nutrition:{protein:25,carbs:75,fat:30,fiber:12,sugar:6,sodium:560,cholesterol:60} },
+  { id:'d20', name:'Paneer Kathi Roll', cal:650, tags:['indian','veggie'], note:'Paratha, spiced paneer, mint chutney, kachumber', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=paneer+kathi+roll', serving:'1 large roll', ingredients:['1 whole wheat paratha','100g paneer (cubed)','turmeric, chilli, cumin','mint-coriander chutney','1 cup kachumber salad'], steps:['Season and pan-fry paneer golden. Warm paratha.','Spread chutney, layer paneer and kachumber. Roll and serve warm.'], nutrition:{protein:30,carbs:55,fat:30,fiber:4,sugar:5,sodium:520,cholesterol:50} },
+  { id:'d21', name:'Rajma Chawal + Salad', cal:620, tags:['indian','veggie'], note:'Kidney bean curry, basmati rice, kachumber', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=rajma+chawal', serving:'1 bowl', ingredients:['1 cup cooked kidney beans','½ cup basmati rice','1 onion','2 tomatoes (pureed)','ginger-garlic paste, garam masala, cumin','kachumber salad'], steps:['Sauté onion golden. Add ginger-garlic, spices, tomato puree. Cook 5 min.','Add rajma + water. Simmer 15 min. Serve over rice with kachumber.'], nutrition:{protein:30,carbs:70,fat:20,fiber:14,sugar:6,sodium:420,cholesterol:0} },
+  { id:'d22', name:'Aloo Gobi + Daal', cal:650, tags:['indian','veggie'], note:'Potato-cauliflower sabzi, yellow daal, Indian salad', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=aloo+gobi', serving:'1 plate', ingredients:['1 cup aloo gobi (potato + cauliflower, cumin, turmeric)','1 cup yellow daal','1 cup Indian salad'], steps:['Make daal: boil lentils, temper with cumin and garlic.','Make aloo gobi: sauté cumin and onion, add veg and spices, cover and cook 15 min. Serve together.'], nutrition:{protein:20,carbs:80,fat:25,fiber:14,sugar:7,sodium:460,cholesterol:0} },
+  { id:'d23', name:'Saag + Makki Roti', cal:550, tags:['indian','veggie'], note:'Mustard greens, corn roti, butter', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=sarson+ka+saag+makki+roti', serving:'1 bowl + 1 roti', ingredients:['2 cups mustard greens + spinach','1 makki roti','1 tbsp butter','ginger, green chilli, salt'], steps:['Pressure cook greens until very soft. Blend coarsely. Season, finish with butter.','Make makki roti: knead corn flour with warm water, cook on flat pan with butter. Serve together.'], nutrition:{protein:15,carbs:60,fat:25,fiber:10,sugar:4,sodium:380,cholesterol:30} },
+  { id:'d24', name:'Bhindi + Daal + Roti', cal:600, tags:['indian','veggie'], note:'Okra masala, lentils, roti', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=bhindi+masala', serving:'1 plate', ingredients:['1 cup bhindi/okra (chopped)','1 cup cooked daal','1 whole wheat roti','onion, tomato, cumin, coriander, turmeric, chilli'], steps:['Sauté bhindi in oil until crisp. Remove. Sauté onion, add spices and tomato, return bhindi.','Prepare daal with tempered cumin. Warm roti on dry pan. Serve all together.'], nutrition:{protein:20,carbs:70,fat:25,fiber:12,sugar:6,sodium:400,cholesterol:0} },
+  { id:'d25', name:'Egg Curry + Roti', cal:600, tags:['indian','veggie'], note:'Boiled eggs in tomato masala, roti', src:'YouTube', srcType:'youtube', url:'https://www.youtube.com/results?search_query=egg+curry+indian', serving:'2 eggs + 1 roti', ingredients:['2 eggs (hard-boiled)','1 onion','2 tomatoes','ginger-garlic paste','cumin, coriander, turmeric, chilli, garam masala','1 whole wheat roti'], steps:['Sauté onion golden. Add ginger-garlic, spices, tomatoes. Cook 7 min into thick masala.','Score boiled eggs. Add to masala with water. Simmer 5 min. Serve with warm roti.'], nutrition:{protein:25,carbs:60,fat:25,fiber:5,sugar:7,sodium:480,cholesterol:370} },
+ ]
+};
+
+// ══════════════════════════════════════════════════════
+// CONSTANTS & STATE
+// ══════════════════════════════════════════════════════
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const MEAL_TYPES = ['breakfast','lunch','snack','dinner'];
+const TABS = {
+  breakfast:['All',"Chef D'ole",'Veggie','Low carb'],
+  lunch:['All','Chicken','Fish','Turkey','Veggie','Low carb'],
+  snack:['All','Veggie','Low carb'],
+  dinner:['All','Chicken','Fish','Turkey','Indian','Veggie',"Chef D'ole",'Low carb'],
+};
+const TAG_MAP = {"Chef D'ole":'chef',Veggie:'veggie','Low carb':'lowcarb',Chicken:'chicken',Fish:'fish',Turkey:'turkey',Indian:'indian',All:null};
+
+let plan = {};
+DAYS.forEach((_,i) => { plan[i] = {}; });
+let activeCarousel = null; // {dayIdx, mealType}
+let activeTab = 'All';
+let flippedCells = new Set(); // track which cells are flipped
+let gCounter = 0;
+
+// ══════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════
+(function initWeek() {
+  const now = new Date();
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - ((now.getDay()+6)%7));
+  const sun = new Date(mon); sun.setDate(mon.getDate()+6);
+  const fmt = d => d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  document.getElementById('week-tag').textContent = `${fmt(mon)} – ${fmt(sun)}`;
+  window._mondayDate = mon;
+  window._todayIdx = (now.getDay()+6)%7;
+})();
+
+// API key
+function saveKey() {
+  const v = document.getElementById('api-key').value.trim();
+  const st = document.getElementById('api-status');
+  if (!v || !v.startsWith('sk-')) { st.textContent='Invalid key'; st.className='api-err'; return; }
+  localStorage.setItem('nk', v);
+  st.textContent='✓ Saved'; st.className='api-ok';
+}
+(function() {
+  const k = localStorage.getItem('nk');
+  if (k) {
+    document.getElementById('api-key').value=k;
+    document.getElementById('api-status').textContent='✓ Saved';
+    document.getElementById('api-status').className='api-ok';
+  }
+  // If config.js loaded keys, reflect that after a short delay
+  setTimeout(() => {
+    const cfg = window.NOURISH_CONFIG || {};
+    if (cfg.anthropicKey && !document.getElementById('api-key').value) {
+      document.getElementById('api-key').value = cfg.anthropicKey;
+      document.getElementById('api-status').textContent = '✓ config.js';
+      document.getElementById('api-status').className = 'api-ok';
+    }
+    if (cfg.instacartKey && !document.getElementById('ic-key').value) {
+      document.getElementById('ic-key').value = cfg.instacartKey;
+      document.getElementById('ic-status').textContent = '✓ config.js';
+      document.getElementById('ic-status').className = 'api-ok';
+    }
+    if (isGhConnected()) updateGhButton(true);
+  }, 500);
+})();
+function getKey() { return localStorage.getItem('nk') || window.NOURISH_CONFIG?.anthropicKey || document.getElementById('api-key').value.trim(); }
+
+// ══════════════════════════════════════════════════════
+// BUILD CALENDAR
+// ══════════════════════════════════════════════════════
+function buildCalendar() {
+  const area = document.getElementById('calendar-area');
+  // Day headers
+  let html = '<div class="cal-day-headers"><div></div>';
+  DAYS.forEach((d,i) => {
+    const date = new Date(window._mondayDate); date.setDate(date.getDate()+i);
+    const isToday = i === window._todayIdx;
+    html += `<div class="day-hd${isToday?' today':''}"><div class="dow">${d}</div><div class="dn">${date.getDate()}</div></div>`;
+  });
+  html += '</div>';
+
+  // Meal rows
+  MEAL_TYPES.forEach(type => {
+    html += `<div class="meal-row" data-type="${type}">
+      <div class="row-label ${type}" data-mealtype="${type}" role="button" tabindex="0">${type}</div>`;
+    DAYS.forEach((_,di) => {
+      html += `<div class="flip-wrap" id="fw-${di}-${type}" data-day="${di}" data-type="${type}">
+        <div class="card" id="card-${di}-${type}">
+          <div class="card-face card-front empty" id="cf-${di}-${type}" onclick="handleCardClick(event,${di},'${type}')">
+            <div class="card-empty-hint"><span class="plus">+</span>Add ${type}</div>
+          </div>
+          <div class="card-face card-back" id="cb-${di}-${type}">
+            <div class="back-left"><div class="back-title">—</div><div class="back-ingredients"></div></div>
+            <div class="back-right">
+              <div class="back-macro cals"><div class="bm-val">—</div><div class="bm-lbl">CAL</div></div>
+              <div class="back-macro prot"><div class="bm-val">—</div><div class="bm-lbl">PRO</div></div>
+              <div class="back-macro carb"><div class="bm-val">—</div><div class="bm-lbl">CARB</div></div>
+              <div class="back-macro fat"><div class="bm-val">—</div><div class="bm-lbl">FAT</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="flip-hint">flip ↩</div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+
+  // Daily macros summary row
+  html += '<div class="macros-row"><div class="macros-row-label">Day total</div>';
+  DAYS.forEach((_,i) => {
+    html += `<div class="day-macro-cell" id="dmc-${i}">
+      <span class="dmc-cal" id="dmc-cal-${i}">—</span>
+      <div class="dmc-macros">
+        <div class="dmc-m p"><div class="v" id="dmc-p-${i}">—</div><div class="l">PRO</div></div>
+        <div class="dmc-m c"><div class="v" id="dmc-c-${i}">—</div><div class="l">CARB</div></div>
+        <div class="dmc-m f"><div class="v" id="dmc-f-${i}">—</div><div class="l">FAT</div></div>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+
+  area.innerHTML = html;
+
+  // Apply CSS flip transform via inline style (CSS class approach for backface)
+  document.querySelectorAll('.card').forEach(c => {
+    c.style.cssText = 'width:100%;height:100%;position:relative;transform-style:preserve-3d;transition:transform .55s cubic-bezier(.4,0,.2,1);';
+  });
+}
+buildCalendar();
+
+// ══════════════════════════════════════════════════════
+// CARD CLICK — tap front: open carousel | tap back: flip back
+// Long-press / right-click on filled card: flip to recipe
+// ══════════════════════════════════════════════════════
+function handleCardClick(e, dayIdx, mealType) {
+  e.stopPropagation();
+  const cellKey = `${dayIdx}-${mealType}`;
+  const isFlipped = flippedCells.has(cellKey);
+  const hasMeal = !!plan[dayIdx][mealType];
+
+  if (isFlipped) {
+    // Clicking the back flips it back to front
+    flipCard(dayIdx, mealType, false);
+    return;
+  }
+  // Clicking the front opens the carousel
+  openCarousel(dayIdx, mealType);
+}
+
+function flipCard(dayIdx, mealType, toBack) {
+  const card = document.getElementById(`card-${dayIdx}-${mealType}`);
+  const cellKey = `${dayIdx}-${mealType}`;
+  if (toBack) {
+    card.style.transform = 'rotateY(180deg)';
+    flippedCells.add(cellKey);
+  } else {
+    card.style.transform = '';
+    flippedCells.delete(cellKey);
+  }
+}
+
+// Flip button on filled cards
+function flipToBack(e, dayIdx, mealType) {
+  e.stopPropagation();
+  flipCard(dayIdx, mealType, true);
+}
+
+// ══════════════════════════════════════════════════════
+// SET / CLEAR MEALS
+// ══════════════════════════════════════════════════════
+function setMeal(dayIdx, mealType, meal) {
+  plan[dayIdx][mealType] = meal;
+  const front = document.getElementById(`cf-${dayIdx}-${mealType}`);
+  const back = document.getElementById(`cb-${dayIdx}-${mealType}`);
+  const wrap = document.getElementById(`fw-${dayIdx}-${mealType}`);
+  const isNone = meal.id === '__none__';
+  const isEatout = meal.id === '__eatout__';
+
+  // Make sure card is flipped to front
+  flipCard(dayIdx, mealType, false);
+
+  // Update front face
+  front.className = `card-face card-front${isNone?' state-none':isEatout?' state-eatout':''}`;
+  const srcIcon = meal.srcType==='chef' ? '📖' : meal.srcType==='youtube' ? '▶' : meal.srcType==='web' ? '🌐' : '';
+  const srcTagHtml = (meal.src && !isNone && !isEatout)
+    ? `<span class="card-tag ${meal.srcType==='chef'?'chef':meal.srcType==='youtube'?'youtube':''}">${srcIcon} ${meal.page||meal.src}</span>`
+    : '';
+  const flipBtnHtml = (!isNone && !isEatout)
+    ? `<button style="position:absolute;bottom:5px;right:24px;background:transparent;border:1px solid var(--border);color:var(--text2);font-size:9px;padding:2px 7px;border-radius:10px;cursor:pointer;font-family:var(--sans);font-weight:500;transition:all .15s;letter-spacing:.3px" onmouseenter="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseleave="this.style.borderColor='var(--border)';this.style.color='var(--text2)'" onclick="openBigCard(event,${dayIdx},'${mealType}')">recipe ↩</button>`
+    : '';
+
+  front.innerHTML = `
+    <div class="card-meal-name">${isNone?'— skipping':isEatout?'🍽 Eating out':meal.name}</div>
+    <div class="card-meta">
+      ${!isNone&&!isEatout&&meal.cal>0?`<span class="card-cal">${meal.cal} kcal</span>`:''}
+      ${srcTagHtml}
+    </div>
+    ${flipBtnHtml}
+    <button style="position:absolute;top:4px;right:5px;background:#E8E5E0;border:none;color:#7A7570;width:15px;height:15px;border-radius:50%;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;font-family:var(--sans)" onclick="clearMeal(event,${dayIdx},'${mealType}')">✕</button>
+  `;
+  // Filled card: click main body → open big card; empty: open carousel
+  if (!isNone && !isEatout) {
+    front.onclick = (e) => {
+      if (e.target.closest('button')) return;
+      openBigCard(e, dayIdx, mealType);
+    };
+  } else {
+    front.onclick = (e) => { if (!e.target.closest('button')) openCarousel(dayIdx, mealType); };
+  }
+
+  // Update back face
+  if (!isNone && !isEatout) {
+    const n = meal.nutrition || {};
+    const ingList = (meal.ingredients||[]).slice(0,5).join(' · ');
+    back.querySelector('.back-title').textContent = meal.name;
+    back.querySelector('.back-ingredients').textContent = ingList + (meal.ingredients?.length > 5 ? ' …' : '');
+    const macros = back.querySelectorAll('.back-macro');
+    const vals = [meal.cal||0, n.protein||0, n.carbs||0, n.fat||0];
+    macros.forEach((m,i) => { m.querySelector('.bm-val').textContent = vals[i]||'—'; });
+  }
+  back.onclick = () => flipCard(dayIdx, mealType, false);
+
+  // Mark wrap as active for styling
+  wrap.classList.toggle('active', false);
+
+  updateDayTotals(dayIdx);
+}
+
+function clearMeal(e, dayIdx, mealType) {
+  e.stopPropagation();
+  delete plan[dayIdx][mealType];
+  const front = document.getElementById(`cf-${dayIdx}-${mealType}`);
+  flipCard(dayIdx, mealType, false);
+  front.className = 'card-face card-front empty';
+  front.innerHTML = `<div class="card-empty-hint"><span class="plus">+</span>Add ${mealType}</div>`;
+  front.onclick = (e) => { if (!e.target.closest('button')) handleCardClick(e, dayIdx, mealType); };
+  updateDayTotals(dayIdx);
+}
+
+function clearAll() {
+  if (!confirm('Clear the entire week?')) return;
+  DAYS.forEach((_,di) => MEAL_TYPES.forEach(t => { if (plan[di][t]) clearMeal({stopPropagation:()=>{}}, di, t); }));
+}
+
+function updateDayTotals(dayIdx) {
+  let cal=0,p=0,c=0,f=0,has=false;
+  MEAL_TYPES.forEach(t => {
+    const m = plan[dayIdx][t];
+    if (m && m.cal > 0) { has=true; cal+=m.cal; p+=m.nutrition?.protein||0; c+=m.nutrition?.carbs||0; f+=m.nutrition?.fat||0; }
+  });
+  document.getElementById(`dmc-cal-${dayIdx}`).textContent = has ? cal : '—';
+  document.getElementById(`dmc-p-${dayIdx}`).textContent = has ? p : '—';
+  document.getElementById(`dmc-c-${dayIdx}`).textContent = has ? c : '—';
+  document.getElementById(`dmc-f-${dayIdx}`).textContent = has ? f : '—';
+}
+
+// ══════════════════════════════════════════════════════
+// DEFAULT PLAN
+// ══════════════════════════════════════════════════════
+function defaultPlan() {
+  const defaults = [
+    {d:0,breakfast:'b1',lunch:'l1',snack:'s6',dinner:'d1'},
+    {d:1,breakfast:'b5',lunch:'l7',snack:'s1',dinner:'d9'},
+    {d:2,breakfast:'b4',lunch:'l4',snack:'s2',dinner:'d19'},
+    {d:3,breakfast:'b1',lunch:'l1',snack:'s5',dinner:'d10'},
+    {d:4,breakfast:'b6',lunch:'l5',snack:'s3',dinner:'d15'},
+    {d:5,breakfast:'b7',lunch:'l9',snack:'s4',dinner:'d18'},
+    {d:6,breakfast:'b2',lunch:'l12',snack:'s10',dinner:'d21'},
+  ];
+  defaults.forEach(row => MEAL_TYPES.forEach(t => {
+    const m = MEALS[t].find(x => x.id === row[t]);
+    if (m) setMeal(row.d, t, m);
+  }));
+}
+defaultPlan();
+
+// ══════════════════════════════════════════════════════
+// CAROUSEL
+// ══════════════════════════════════════════════════════
+function openCarousel(dayIdx, mealType) {
+  activeCarousel = {dayIdx, mealType};
+  activeTab = 'All';
+  document.getElementById('drawer-search').value = '';
+
+  const typeColors = {breakfast:'var(--gold)',lunch:'var(--green)',snack:'var(--blue)',dinner:'var(--rose)'};
+  document.getElementById('drawer-title').innerHTML = `Choose <em>${mealType}</em>`;
+  document.getElementById('drawer-sub').textContent = `${DAYS[dayIdx]} · ${MEALS[mealType].length} options`;
+
+  // Tabs
+  const tabs = TABS[mealType] || ['All'];
+  document.getElementById('drawer-tabs').innerHTML = tabs.map(t =>
+    `<button class="dtab${t==='All'?' active':''}" onclick="setCarouselTab('${t}',this)">${t}</button>`
+  ).join('');
+
+  renderCarousel();
+  document.getElementById('carousel-drawer').classList.add('open');
+  // Highlight active cell
+  document.querySelectorAll('.flip-wrap').forEach(w => w.classList.remove('active'));
+  document.getElementById(`fw-${dayIdx}-${mealType}`)?.classList.add('active');
+}
+
+function closeCarousel() {
+  document.getElementById('carousel-drawer').classList.remove('open');
+  document.querySelectorAll('.flip-wrap').forEach(w => w.classList.remove('active'));
+  activeCarousel = null;
+}
+
+function setCarouselTab(tab, el) {
+  activeTab = tab;
+  document.querySelectorAll('.dtab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderCarousel();
+}
+
+function filterCarousel() { renderCarousel(); }
+
+function renderCarousel() {
+  if (!activeCarousel) return;
+  const {dayIdx, mealType} = activeCarousel;
+  const q = document.getElementById('drawer-search').value.toLowerCase();
+  const tagFilter = TAG_MAP[activeTab];
+  const current = plan[dayIdx]?.[mealType];
+  const track = document.getElementById('carousel-track');
+
+  // Special options
+  const noneSelected = current?.id === '__none__';
+  const eatoutSelected = current?.id === '__eatout__';
+
+  let cards = '';
+
+  // Skip / Eat-out special cards (only when no search/filter)
+  if (!q && !tagFilter) {
+    cards += `
+      <div class="c-card special special-none${noneSelected?' selected':''}" onclick="selectCarouselSpecial('__none__')">
+        <div class="c-card-color-bar" style="background:var(--border-strong)"></div>
+        <div class="c-card-body">
+          <div class="c-card-name" style="color:var(--text2);font-style:italic">Skip / None</div>
+          <div class="c-card-note">Not eating this meal slot</div>
+        </div>
+        <div class="c-card-footer">
+          <div><div class="c-cal">0</div><div class="c-cal-lbl">kcal</div></div>
+          <button class="c-select-btn">${noneSelected?'✓ Set':'Select'}</button>
+        </div>
+      </div>
+      <div class="c-card special special-eatout${eatoutSelected?' selected':''}" onclick="selectCarouselSpecial('__eatout__')">
+        <div class="c-card-color-bar" style="background:var(--gold)"></div>
+        <div class="c-card-body">
+          <div class="c-card-name">🍽 Eating out</div>
+          <div class="c-card-note">Restaurant or takeaway — no groceries needed</div>
+        </div>
+        <div class="c-card-footer">
+          <div><div class="c-cal">—</div><div class="c-cal-lbl">kcal</div></div>
+          <button class="c-select-btn">${eatoutSelected?'✓ Set':'Select'}</button>
+        </div>
+      </div>`;
+  }
+
+  const list = MEALS[mealType].filter(m =>
+    (!tagFilter || m.tags.includes(tagFilter)) &&
+    (!q || m.name.toLowerCase().includes(q) || (m.note||'').toLowerCase().includes(q))
+  );
+
+  if (!list.length && !cards) {
+    track.innerHTML = '<div class="no-results-carousel">No meals match your search</div>';
+    // Still show "add" card
+    track.innerHTML += renderAddMealCard(mealType);
+    return;
+  }
+
+  cards += list.map(m => {
+    const isSel = current?.id === m.id;
+    const tagsHtml = m.tags.map(t => `<span class="c-tag ${t}">${t}</span>`).join('');
+    const srcIcon = m.srcType==='chef'?'📖':m.srcType==='youtube'?'▶':m.srcType==='web'?'🌐':'';
+    const srcLabel = m.page ? `${m.page}` : m.srcType!=='simple' ? m.src : '';
+    return `<div class="c-card type-${mealType}${isSel?' selected':''}" onclick="selectCarouselMeal('${m.id}')">
+      <div class="c-card-color-bar"></div>
+      <div class="c-card-body">
+        <div class="c-card-tags">${tagsHtml}</div>
+        <div class="c-card-name">${m.name}</div>
+        <div class="c-card-note">${m.note||''}</div>
+        ${srcLabel?`<div style="font-size:9px;color:var(--text3);margin-top:4px">${srcIcon} ${srcLabel}</div>`:''}
+      </div>
+      <div class="c-card-footer">
+        <div><div class="c-cal">${m.cal}</div><div class="c-cal-lbl">kcal</div></div>
+        <button class="c-select-btn">${isSel?'✓ Selected':'Select'}</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  track.innerHTML = cards + renderAddMealCard(mealType);
+}
+
+function selectCarouselMeal(mealId) {
+  if (!activeCarousel) return;
+  const {dayIdx, mealType} = activeCarousel;
+  const meal = MEALS[mealType].find(m => m.id === mealId);
+  if (meal) { setMeal(dayIdx, mealType, meal); renderCarousel(); }
+  // briefly show check then close
+  setTimeout(closeCarousel, 600);
+}
+
+function selectCarouselSpecial(id) {
+  if (!activeCarousel) return;
+  const {dayIdx, mealType} = activeCarousel;
+  setMeal(dayIdx, mealType, {id, name:id==='__none__'?'Skip':'Eating out', cal:0, nutrition:{protein:0,carbs:0,fat:0}});
+  renderCarousel();
+  setTimeout(closeCarousel, 600);
+}
+
+function scrollCarousel(dir) {
+  const track = document.getElementById('carousel-track');
+  track.scrollBy({left: dir * 360, behavior: 'smooth'});
+}
+
+// Close carousel on backdrop click
+document.addEventListener('click', e => {
+  const drawer = document.getElementById('carousel-drawer');
+  if (activeCarousel &&
+      !drawer.contains(e.target) &&
+      !e.target.closest('.flip-wrap') &&
+      !e.target.closest('.row-label') &&
+      !e.target.closest('[data-mealtype]')) {
+    closeCarousel();
+  }
+});
+
+// ══════════════════════════════════════════════════════
+// GROCERY LIST
+// ══════════════════════════════════════════════════════
+async function planningComplete() {
+  const key = getKey();
+  if (!key || !key.startsWith('sk-')) { alert('Please enter your Anthropic API key first.'); return; }
+  const summary = [];
+  DAYS.forEach((day,di) => MEAL_TYPES.forEach(t => {
+    const m = plan[di][t];
+    if (m && m.id !== '__none__' && m.id !== '__eatout__') summary.push({day,t,name:m.name,ingredients:m.ingredients||[]});
+  }));
+  if (!summary.length) { alert('Add some meals first.'); return; }
+  document.getElementById('gen-overlay').classList.add('active');
+  const mealsText = summary.map(m=>`${m.day} ${m.t}: ${m.name}\n  ${m.ingredients.join(', ')}`).join('\n');
+  const prompt = `Generate a consolidated grocery list from this weekly meal plan. Assume 2 servings per meal.\n\nMEAL PLAN:\n${mealsText}\n\nRules: combine duplicates, group into: Produce, Proteins, Dairy & Eggs, Grains & Pantry, Condiments & Spices, Frozen & Other. Format: "Item (quantity)". Skip salt/water basics.\n\nReturn ONLY valid JSON: {"Produce":[...],"Proteins":[...],"Dairy & Eggs":[...],"Grains & Pantry":[...],"Condiments & Spices":[...],"Frozen & Other":[...]}`;
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,messages:[{role:'user',content:prompt}]})});
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data?.error?.message||`API ${resp.status}`);
+    const raw = data.content.map(c=>c.text||'').join('').replace(/^```[\w]*\n?/,'').replace(/\n?```$/,'').trim();
+    renderGroceries(JSON.parse(raw));
+    // Auto-save to GitHub after grocery list generated
+    saveToGithub();
+  } catch(e) { alert(`Error: ${e.message}`); }
+  finally { document.getElementById('gen-overlay').classList.remove('active'); }
+}
+
+
+// ══════════════════════════════════════════════════════
+// INSTACART API INTEGRATION
+// ══════════════════════════════════════════════════════
+
+function saveIcKey() {
+  const v = document.getElementById('ic-key').value.trim();
+  const st = document.getElementById('ic-status');
+  if (!v) { st.textContent='Enter a key'; st.className='api-err'; return; }
+  localStorage.setItem('ic_key', v);
+  st.textContent='✓ Saved'; st.className='api-ok';
+}
+(function() {
+  const k = localStorage.getItem('ic_key');
+  if (k) {
+    document.getElementById('ic-key').value = k;
+    document.getElementById('ic-status').textContent = '✓ Saved';
+    document.getElementById('ic-status').className = 'api-ok';
+  }
+})();
+function getIcKey() { return localStorage.getItem('ic_key') || window.NOURISH_CONFIG?.instacartKey || document.getElementById('ic-key').value.trim(); }
+
+// Parse "2 cups chicken breast" → {quantity, unit, name}
+function parseIngredient(raw) {
+  const UNITS = ['cup','cups','tbsp','tsp','oz','ounce','ounces','g','gram','grams','kg','lb','lbs','pound','pounds','ml','l','litre','liter','tablespoon','tablespoons','teaspoon','teaspoons','clove','cloves','slice','slices','can','cans','bunch','package','pkg','pinch','handful','piece','pieces','sprig','sprigs'];
+  const str = raw.replace(/[()]/g,'').trim();
+  // Try "N unit name" or "N/M unit name"
+  const m = str.match(/^([\d½¼¾⅓⅔]+(?:\/\d+)?(?:\.\d+)?)\s*([\w]+)?\s+(.*)/);
+  if (m) {
+    const qty = parseFloat(m[1].replace('½','.5').replace('¼','.25').replace('¾','.75').replace('⅓','.33').replace('⅔','.67')) || 1;
+    const maybeUnit = (m[2]||'').toLowerCase();
+    const isUnit = UNITS.includes(maybeUnit);
+    return {
+      quantity: qty,
+      unit: isUnit ? maybeUnit : 'each',
+      name: isUnit ? m[3].trim() : ((m[2]||'')+' '+m[3]).trim()
+    };
+  }
+  return { quantity: 1, unit: 'each', name: str };
+}
+
+// Normalise unit strings to Instacart accepted values
+function normaliseUnit(u) {
+  const map = {
+    cup:'cup', cups:'cup', tablespoon:'tablespoon', tablespoons:'tablespoon',
+    tbsp:'tablespoon', teaspoon:'teaspoon', teaspoons:'teaspoon', tsp:'teaspoon',
+    oz:'ounce', ounce:'ounce', ounces:'ounce',
+    g:'gram', gram:'gram', grams:'gram',
+    kg:'kilogram', lb:'pound', lbs:'pound', pound:'pound', pounds:'pound',
+    ml:'milliliter', l:'liter', litre:'liter', liter:'liter',
+    clove:'each', cloves:'each', slice:'each', slices:'each',
+    can:'each', cans:'each', bunch:'each', pinch:'each',
+    handful:'each', piece:'each', pieces:'each', package:'each',
+  };
+  return map[u.toLowerCase()] || 'each';
+}
+
+// Build Instacart LineItem array from a meal's ingredients
+function buildLineItems(ingredients) {
+  return ingredients
+    .filter(i => i && !i.startsWith('(') && i.length > 2)
+    .map(raw => {
+      const {quantity, unit, name} = parseIngredient(raw);
+      // Strip parenthetical notes from name
+      const cleanName = name.replace(/\(.*?\)/g,'').replace(/,.*$/,'').trim();
+      return {
+        name: cleanName,
+        display_text: raw.replace(/\(.*?\)/g,'').trim(),
+        measurements: [{ quantity, unit: normaliseUnit(unit) }]
+      };
+    });
+}
+
+// POST to Instacart IDP API → returns products_link_url
+async function callInstacartRecipeAPI(title, ingredients, steps, servings) {
+  const icKey = getIcKey();
+  if (!icKey) throw new Error('No Instacart API key — enter it in the banner above.');
+
+  const body = {
+    title,
+    author: 'Nourish Meal Planner',
+    servings: servings || 2,
+    expires_in: 30,
+    instructions: steps || [],
+    ingredients: buildLineItems(ingredients),
+    landing_page_configuration: {
+      enable_pantry_items: true
+    }
+  };
+
+  const resp = await fetch('https://connect.instacart.com/idp/v1/products/recipe', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Authorization': `Bearer ${icKey}`
+    },
+    body: JSON.stringify(body)
+  });
+
+  const data = await resp.json();
+  if (!resp.ok) {
+    const msg = data?.message || data?.errors?.[0]?.message || `Instacart error ${resp.status}`;
+    throw new Error(msg);
+  }
+  return data.products_link_url;
+}
+
+// POST to Instacart with a flat grocery list (shopping list endpoint)
+async function callInstacartListAPI(title, allIngredients) {
+  const icKey = getIcKey();
+  if (!icKey) throw new Error('No Instacart API key — enter it in the banner above.');
+
+  // Dedupe ingredient names
+  const seen = new Set();
+  const lineItems = allIngredients
+    .filter(i => i && !i.startsWith('(') && i.length > 2)
+    .map(raw => {
+      const {quantity, unit, name} = parseIngredient(raw);
+      const clean = name.replace(/\(.*?\)/g,'').replace(/,.*$/,'').trim();
+      if (seen.has(clean.toLowerCase())) return null;
+      seen.add(clean.toLowerCase());
+      return { name: clean, display_text: raw.replace(/\(.*?\)/g,'').trim(), measurements: [{quantity, unit: normaliseUnit(unit)}] };
+    })
+    .filter(Boolean);
+
+  const resp = await fetch('https://connect.instacart.com/idp/v1/products/recipe', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Authorization': `Bearer ${icKey}`
+    },
+    body: JSON.stringify({
+      title,
+      author: 'Nourish Meal Planner',
+      servings: 2,
+      expires_in: 30,
+      ingredients: lineItems,
+      landing_page_configuration: { enable_pantry_items: true }
+    })
+  });
+
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data?.message || `Instacart error ${resp.status}`);
+  return data.products_link_url;
+}
+
+// Show Instacart link result inline
+function showIcLink(containerEl, url) {
+  containerEl.innerHTML = `
+    <div class="ic-link-result">
+      <span>✓ Cart ready — </span>
+      <a href="${url}" target="_blank">Open on Instacart ↗</a>
+      <button class="ic-link-copy" onclick="navigator.clipboard.writeText('${url}');this.textContent='Copied!'">Copy link</button>
+    </div>`;
+}
+
+// ── Per-meal Shop on Instacart button (on big card back) ──────────────────
+async function shopMealOnInstacart(btn, mealId, mealType) {
+  const meal = MEALS[mealType]?.find(m => m.id === mealId);
+  if (!meal) return;
+  const container = btn.closest('.ic-back-container');
+  btn.classList.add('loading');
+  btn.innerHTML = '<span class="ic-spinner"></span> Sending to Instacart…';
+  try {
+    const url = await callInstacartRecipeAPI(meal.name, meal.ingredients||[], meal.steps||[], 2);
+    showIcLink(container, url);
+  } catch(e) {
+    container.innerHTML = `<div class="ic-status-msg err">⚠ ${e.message}</div>`;
+  }
+}
+
+// ── Render groceries with real Instacart integration ──────────────────────
+function renderGroceries(g) {
+  gCounter = 0;
+  document.getElementById('grocery-body').innerHTML = Object.entries(g)
+    .filter(([,items])=>items?.length)
+    .map(([cat,items])=>`<div class="g-cat"><h4>${cat}</h4>${items.map(item=>{
+      const id='g'+gCounter++;
+      return`<div class="g-item"><input type="checkbox" id="${id}"><label for="${id}">${item}</label></div>`;
+    }).join('')}</div>`).join('');
+
+  const all = Object.values(g).flat();
+  document.getElementById('grocery-footer').innerHTML = `
+    <div style="font-size:10px;color:var(--text3);text-align:center;margin-bottom:6px">${all.length} items for the week</div>
+    <div id="ic-week-container">
+      <button class="ic-btn" id="ic-week-btn" onclick="shopWeekOnInstacart(this)">
+        <span class="ic-logo">🛒</span> Send full week to Instacart
+      </button>
+    </div>
+    <div style="font-size:10px;color:var(--text3);text-align:center;margin:6px 0 4px">or open store directly</div>
+    <button class="store-btn" onclick="window.open('https://www.instacart.com','_blank')">
+      <div><div class="sn">Instacart</div><span class="ss">Open and shop manually</span></div>
+      <span style="color:var(--gold)">→</span>
+    </button>
+    <button class="store-btn" onclick="window.open('https://www.amazon.com/alm/storefront?almBrandId=QW1hem9uIEZyZXNo','_blank')">
+      <div><div class="sn">Amazon Fresh</div><span class="ss">Same-day with Prime</span></div>
+      <span style="color:var(--gold)">→</span>
+    </button>`;
+
+  document.getElementById('grocery-drawer').classList.add('open');
+}
+
+async function shopWeekOnInstacart(btn) {
+  const container = document.getElementById('ic-week-container');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="ic-spinner"></span> Generating Instacart cart…';
+
+  // Collect all ingredients from the week
+  const allIngredients = [];
+  DAYS.forEach((_,di) => MEAL_TYPES.forEach(t => {
+    const m = plan[di][t];
+    if (m && m.id !== '__none__' && m.id !== '__eatout__' && m.ingredients) {
+      allIngredients.push(...m.ingredients);
+    }
+  }));
+
+  if (!allIngredients.length) {
+    container.innerHTML = '<div class="ic-status-msg err">No ingredients to send.</div>';
+    return;
+  }
+
+  const weekStr = new Date(window._mondayDate).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  try {
+    const url = await callInstacartListAPI(`Nourish — Week of ${weekStr}`, allIngredients);
+    showIcLink(container, url);
+  } catch(e) {
+    container.innerHTML = `<div class="ic-status-msg err">⚠ ${e.message}</div>
+      <button class="ic-btn" style="margin-top:6px" onclick="shopWeekOnInstacart(this)">Try again</button>`;
+  }
+}
+
+function closeGrocery() { document.getElementById('grocery-drawer').classList.remove('open'); }
+
+
+// ══════════════════════════════════════════════════════
+// EXCEL EXPORT
+// ══════════════════════════════════════════════════════
+function exportToExcel() {
+  const wb = XLSX.utils.book_new();
+  const ws = new Date(window._mondayDate);
+  const wkStr = ws.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  // Sheet 1: Plan
+  const rows = [['Nourish Weekly Plan',`Week of ${wkStr}`,'','','','','',''],['', ...DAYS],[]];
+  MEAL_TYPES.forEach(t => {
+    const row = [t.charAt(0).toUpperCase()+t.slice(1)];
+    DAYS.forEach((_,di) => { const m=plan[di][t]; row.push(!m?'—':m.id==='__none__'?'Skip':m.id==='__eatout__'?'Eating out':m.name); });
+    rows.push(row);
+  });
+  rows.push([]);
+  [['Calories (kcal)','cal'],['Protein (g)','protein'],['Carbs (g)','carbs'],['Fat (g)','fat']].forEach(([lbl,key]) => {
+    const row = [lbl];
+    DAYS.forEach((_,di) => {
+      const t = MEAL_TYPES.reduce((s,t) => { const m=plan[di][t]; return s+(key==='cal'?m?.cal||0:m?.nutrition?.[key]||0); },0);
+      row.push(t||'—');
+    });
+    rows.push(row);
+  });
+  const s1 = XLSX.utils.aoa_to_sheet(rows);
+  s1['!cols'] = [{wch:18},...DAYS.map(()=>({wch:28}))];
+  XLSX.utils.book_append_sheet(wb, s1, 'Weekly Plan');
+  // Sheet 2: Detail
+  const nutRows = [['Date','Day','Type','Meal','Calories','Protein g','Carbs g','Fat g','Fiber g','Sodium mg','Status','Source']];
+  DAYS.forEach((day,di) => {
+    const date = new Date(ws); date.setDate(date.getDate()+di);
+    const ds = date.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    MEAL_TYPES.forEach(t => {
+      const m = plan[di][t];
+      if (!m) nutRows.push([ds,day,t,'—','','','','','','','Not set','']);
+      else if (m.id==='__none__') nutRows.push([ds,day,t,'Skipped',0,0,0,0,0,0,'Skipped','']);
+      else if (m.id==='__eatout__') nutRows.push([ds,day,t,'Eating out','','','','','','','Eating out','']);
+      else { const n=m.nutrition||{}; nutRows.push([ds,day,t,m.name,m.cal||0,n.protein||0,n.carbs||0,n.fat||0,n.fiber||0,n.sodium||0,'Home cooked',m.page?`${m.src} · ${m.page}`:m.src||'']); }
+    });
+  });
+  const s2 = XLSX.utils.aoa_to_sheet(nutRows);
+  s2['!cols'] = [{wch:12},{wch:8},{wch:11},{wch:32},{wch:9},{wch:10},{wch:9},{wch:9},{wch:9},{wch:10},{wch:13},{wch:30}];
+  XLSX.utils.book_append_sheet(wb, s2, 'Daily Nutrition');
+  // Sheet 3: Summary
+  const allM = DAYS.flatMap((_,di) => MEAL_TYPES.map(t => plan[di][t]).filter(m=>m&&m.cal>0));
+  const [tCal,tP,tC,tF] = ['cal','protein','carbs','fat'].map(k => allM.reduce((s,m)=>s+(k==='cal'?m.cal||0:m.nutrition?.[k]||0),0));
+  const days = Math.max(DAYS.filter((_,di)=>MEAL_TYPES.some(t=>plan[di][t]?.cal>0)).length,1);
+  const s3 = XLSX.utils.aoa_to_sheet([
+    ['Nourish — Summary',`Week of ${wkStr}`],[],
+    ['Metric','Weekly','Daily Avg'],
+    ['Calories',tCal,Math.round(tCal/days)],['Protein g',tP,Math.round(tP/days)],
+    ['Carbs g',tC,Math.round(tC/days)],['Fat g',tF,Math.round(tF/days)],[],
+    ['Protein %',tCal?Math.round(tP*4/tCal*100)+'%':'—'],
+    ['Carbs %',tCal?Math.round(tC*4/tCal*100)+'%':'—'],
+    ['Fat %',tCal?Math.round(tF*9/tCal*100)+'%':'—'],[],
+    ['Home cooked',allM.length],
+    ['Eating out',DAYS.flatMap((_,di)=>MEAL_TYPES.map(t=>plan[di][t])).filter(m=>m?.id==='__eatout__').length],
+    ['Skipped',DAYS.flatMap((_,di)=>MEAL_TYPES.map(t=>plan[di][t])).filter(m=>m?.id==='__none__').length],
+  ]);
+  s3['!cols'] = [{wch:22},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, s3, 'Summary');
+  const fn = `Nourish_${ws.toISOString().slice(0,10)}.xlsx`;
+  XLSX.writeFile(wb, fn);
+  const t = document.getElementById('toast');
+  t.textContent = `✓ ${fn} downloaded`;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ══════════════════════════════════════════════════════
+// BIG CARD FLIP
+// ══════════════════════════════════════════════════════
+let bigCardOpen = false;
+
+function openBigCard(e, dayIdx, mealType) {
+  if (e) e.stopPropagation();
+  const meal = plan[dayIdx]?.[mealType];
+  if (!meal || meal.id === '__none__' || meal.id === '__eatout__') return;
+
+  // Populate front
+  const typeEl = document.getElementById('bc-type');
+  typeEl.textContent = mealType;
+  typeEl.className = 'bigcard-meal-type ' + mealType;
+
+  document.getElementById('bc-name').textContent = meal.name;
+  document.getElementById('bc-note').textContent = meal.note || '';
+
+  const n = meal.nutrition || {};
+  document.getElementById('bc-macros').innerHTML = [
+    {cls:'cal', val:meal.cal||0, lbl:'CAL'},
+    {cls:'pro', val:n.protein||0, lbl:'PROTEIN'},
+    {cls:'car', val:n.carbs||0, lbl:'CARBS'},
+    {cls:'fat', val:n.fat||0, lbl:'FAT'},
+  ].map(m => `<div class="bfm ${m.cls}"><div class="bfm-val">${m.val}</div><div class="bfm-lbl">${m.lbl}</div></div>`).join('');
+
+  // Set front accent colour
+  document.getElementById('bigcard-front').className = `bigcard-face bigcard-front type-${mealType}`;
+
+  // Populate back
+  document.getElementById('bc-back-title').textContent = meal.name;
+  document.getElementById('bc-back-sub').textContent = meal.serving ? `Serving: ${meal.serving}` : '';
+
+  document.getElementById('bc-ingredients').innerHTML =
+    (meal.ingredients || []).map(i => `<li>${i}</li>`).join('');
+
+  document.getElementById('bc-steps').innerHTML =
+    (meal.steps || []).map(s => `<li>${s}</li>`).join('');
+
+  // Nutrition table
+  const cal = meal.cal || 0;
+  document.getElementById('bc-nutrition').innerHTML = `
+    <div class="nut-row major"><span class="nt-l">Calories</span><span class="nt-v">${cal}<span class="nt-unit">kcal</span></span></div>
+    <div class="nut-row major"><span class="nt-l">Protein</span><span class="nt-v">${n.protein||0}<span class="nt-unit">g</span></span></div>
+    <div class="nut-row major"><span class="nt-l">Carbs</span><span class="nt-v">${n.carbs||0}<span class="nt-unit">g</span></span></div>
+    <div class="nut-row minor"><span class="nt-l">Fiber</span><span class="nt-v">${n.fiber||0}<span class="nt-unit">g</span></span></div>
+    <div class="nut-row minor"><span class="nt-l">Sugars</span><span class="nt-v">${n.sugar||0}<span class="nt-unit">g</span></span></div>
+    <div class="nut-row major"><span class="nt-l">Fat</span><span class="nt-v">${n.fat||0}<span class="nt-unit">g</span></span></div>
+    <div class="nut-row minor"><span class="nt-l">Sodium</span><span class="nt-v">${n.sodium||0}<span class="nt-unit">mg</span></span></div>
+    <div class="nut-row minor"><span class="nt-l">Cholesterol</span><span class="nt-v">${n.cholesterol||0}<span class="nt-unit">mg</span></span></div>
+  `;
+
+  // Macro bars
+  const pPct = cal > 0 ? Math.round((n.protein||0)*4/cal*100) : 0;
+  const cPct = cal > 0 ? Math.round((n.carbs||0)*4/cal*100) : 0;
+  const fPct = cal > 0 ? Math.round((n.fat||0)*9/cal*100) : 0;
+  document.getElementById('bc-macro-bars').innerHTML = [
+    {cls:'p', lbl:'Protein', pct:pPct},
+    {cls:'c', lbl:'Carbs', cPct, pct:cPct},
+    {cls:'f', lbl:'Fat', pct:fPct},
+  ].map(m => `<div class="mb-row">
+    <div class="mb-label"><span>${m.lbl}</span><span>${m.pct}%</span></div>
+    <div class="mb-track"><div class="mb-fill ${m.cls}" style="width:${m.pct}%"></div></div>
+  </div>`).join('');
+
+  // Source link
+  const slEl = document.getElementById('bc-src-link');
+  if (meal.url || meal.page) {
+    const icon = meal.srcType==='chef'?'📖':meal.srcType==='youtube'?'▶':'🌐';
+    const label = meal.page ? `${meal.src} · ${meal.page}` : (meal.src || '');
+    const tag = meal.url ? 'a' : 'div';
+    const attr = meal.url ? `href="${meal.url}" target="_blank"` : '';
+    slEl.innerHTML = `<${tag} ${attr} class="src-link-back">${icon} ${label}</${tag}>`;
+  } else { slEl.innerHTML = ''; }
+
+  // Reset to front face
+  document.getElementById('bigcard-flipper').classList.remove('flipped');
+
+  // Add Instacart button to big card nutrition panel
+  const icOld = document.getElementById('bc-ic-container');
+  if (icOld) icOld.remove();
+  const icDiv = document.createElement('div');
+  icDiv.id = 'bc-ic-container';
+  icDiv.className = 'ic-back-container';
+  icDiv.style.cssText = 'margin-top:10px';
+  icDiv.innerHTML = `<button class="ic-back-btn" onclick="shopMealOnInstacart(this,'${meal.id}','${mealType}')">
+    🛒 Shop on Instacart
+  </button>`;
+  document.getElementById('bc-src-link').after(icDiv);
+
+  // Open overlay
+  const overlay = document.getElementById('bigcard-overlay');
+  overlay.style.display = 'flex';
+  requestAnimationFrame(() => { overlay.classList.add('open'); });
+  bigCardOpen = true;
+}
+
+function flipBigCard() {
+  document.getElementById('bigcard-flipper').classList.toggle('flipped');
+}
+
+function closeBigCard(e) {
+  if (e) e.stopPropagation();
+  const overlay = document.getElementById('bigcard-overlay');
+  overlay.classList.remove('open');
+  setTimeout(() => { overlay.style.display = 'none'; }, 400);
+  bigCardOpen = false;
+}
+
+function handleBigCardOverlayClick(e) {
+  if (e.target === e.currentTarget) closeBigCard();
+}
+
+// Keyboard support
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && bigCardOpen) closeBigCard();
+  if ((e.key === 'Enter' || e.key === ' ') && bigCardOpen) { e.preventDefault(); flipBigCard(); }
+});
+
+
+// Open carousel for a meal type — picks the first unfilled day, or day 0
+
+function renderAddMealCard(mealType) {
+  return `<div class="c-card add-meal-card" onclick="openAddMealForm('${mealType}')">
+    <div class="c-card-color-bar" style="background:var(--border-strong)"></div>
+    <div class="c-card-body" style="align-items:center;justify-content:center;text-align:center;gap:8px">
+      <div style="font-size:28px;opacity:.4">+</div>
+      <div class="c-card-name" style="color:var(--text2)">Add a new meal</div>
+      <div class="c-card-note">Create a custom ${mealType} option</div>
+    </div>
+    <div class="c-card-footer">
+      <div style="font-size:11px;color:var(--text3)">Custom</div>
+      <button class="c-select-btn">+ Add</button>
+    </div>
+  </div>`;
+}
+
+function openCarouselForType(mealType) {
+  let targetDay = 0;
+  for (let di = 0; di < DAYS.length; di++) {
+    if (!plan[di][mealType]) { targetDay = di; break; }
+  }
+  openCarousel(targetDay, mealType);
+}
+
+// Delegated click + keyboard on row labels
+document.getElementById('calendar-area').addEventListener('click', e => {
+  const label = e.target.closest('[data-mealtype]');
+  if (label && label.classList.contains('row-label')) {
+    openCarouselForType(label.dataset.mealtype);
+  }
+});
+document.getElementById('calendar-area').addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    const label = e.target.closest('[data-mealtype]');
+    if (label && label.classList.contains('row-label')) {
+      e.preventDefault();
+      openCarouselForType(label.dataset.mealtype);
+    }
+  }
+});
+
+// ══════════════════════════════════════════════════════
+// ADD CUSTOM MEAL
+// ══════════════════════════════════════════════════════
+let customMealTarget = null; // {mealType} for which type we're adding to
+
+function openAddMealForm(mealType) {
+  customMealTarget = mealType;
+  // Pre-fill meal type selector
+  document.getElementById('cm-type').value = mealType;
+  document.getElementById('cm-name').value = '';
+  document.getElementById('cm-cal').value = '';
+  document.getElementById('cm-protein').value = '';
+  document.getElementById('cm-carbs').value = '';
+  document.getElementById('cm-fat').value = '';
+  document.getElementById('cm-note').value = '';
+  document.getElementById('cm-ingredients').value = '';
+  document.getElementById('cm-steps').value = '';
+  document.getElementById('cm-error').textContent = '';
+  document.getElementById('add-meal-overlay').classList.add('open');
+}
+
+function closeAddMealForm() {
+  document.getElementById('add-meal-overlay').classList.remove('open');
+  customMealTarget = null;
+}
+
+function submitCustomMeal() {
+  const name = document.getElementById('cm-name').value.trim();
+  const type = document.getElementById('cm-type').value;
+  const cal = parseInt(document.getElementById('cm-cal').value) || 0;
+  const protein = parseInt(document.getElementById('cm-protein').value) || 0;
+  const carbs = parseInt(document.getElementById('cm-carbs').value) || 0;
+  const fat = parseInt(document.getElementById('cm-fat').value) || 0;
+  const note = document.getElementById('cm-note').value.trim();
+  const ingredientsRaw = document.getElementById('cm-ingredients').value.trim();
+  const stepsRaw = document.getElementById('cm-steps').value.trim();
+
+  if (!name) {
+    document.getElementById('cm-error').textContent = 'Please enter a meal name.';
+    return;
+  }
+
+  const id = 'custom_' + Date.now();
+  const meal = {
+    id, name, cal,
+    tags: ['custom'],
+    note: note || ingredientsRaw.split('\n')[0] || '',
+    src: 'Your recipe', srcType: 'simple',
+    serving: '1 serving',
+    ingredients: ingredientsRaw ? ingredientsRaw.split('\n').map(s=>s.trim()).filter(Boolean) : [],
+    steps: stepsRaw ? stepsRaw.split('\n').map(s=>s.trim()).filter(Boolean) : [],
+    nutrition: { protein, carbs, fat, fiber:0, sugar:0, sodium:0, cholesterol:0 }
+  };
+
+  // Add to MEALS database
+  if (!MEALS[type]) MEALS[type] = [];
+  MEALS[type].unshift(meal); // add at top
+
+  // Save to localStorage for persistence
+  try {
+    const saved = JSON.parse(localStorage.getItem('nourish_custom') || '{}');
+    if (!saved[type]) saved[type] = [];
+    saved[type].unshift(meal);
+    localStorage.setItem('nourish_custom', JSON.stringify(saved));
+  } catch(e) {}
+
+  closeAddMealForm();
+
+  // Open carousel for this type so user can select the new meal
+  openCarouselForType(type);
+
+  showToast(`"${name}" added to ${type} options`);
+}
+
+// Load saved custom meals on startup
+(function loadCustomMeals() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('nourish_custom') || '{}');
+    Object.entries(saved).forEach(([type, meals]) => {
+      if (!MEALS[type]) MEALS[type] = [];
+      meals.forEach(m => {
+        if (!MEALS[type].find(x => x.id === m.id)) MEALS[type].unshift(m);
+      });
+    });
+  } catch(e) {}
+})();
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+
+// ══════════════════════════════════════════════════════
+// GITHUB SYNC
+// ══════════════════════════════════════════════════════
+
+function getGhConfig() {
+  const cfg = window.NOURISH_CONFIG || {};
+  return {
+    user:  localStorage.getItem('gh_user')  || cfg.githubUser  || '',
+    repo:  localStorage.getItem('gh_repo')  || cfg.githubRepo  || '',
+    token: localStorage.getItem('gh_token') || cfg.githubToken || '',
+  };
+}
+
+function isGhConnected() {
+  const c = getGhConfig();
+  return c.user && c.repo && c.token;
+}
+
+// Load saved settings into panel inputs
+function openGithubPanel() {
+  const panel = document.getElementById('gh-panel');
+  const isOpen = panel.classList.contains('open');
+  panel.classList.toggle('open', !isOpen);
+  if (!isOpen) {
+    const c = getGhConfig();
+    document.getElementById('gh-user').value  = c.user;
+    document.getElementById('gh-repo').value  = c.repo;
+    document.getElementById('gh-token').value = c.token;
+    if (isGhConnected()) loadGhHistory();
+  }
+}
+
+function saveGithubSettings() {
+  const user  = document.getElementById('gh-user').value.trim();
+  const repo  = document.getElementById('gh-repo').value.trim();
+  const token = document.getElementById('gh-token').value.trim();
+  const st = document.getElementById('gh-status');
+
+  if (!user || !repo || !token) {
+    st.className = 'gh-status err';
+    st.textContent = 'Please fill in all three fields.';
+    return;
+  }
+
+  localStorage.setItem('gh_user', user);
+  localStorage.setItem('gh_repo', repo);
+  localStorage.setItem('gh_token', token);
+
+  st.className = 'gh-status ok';
+  st.textContent = '✓ Settings saved. Testing connection…';
+
+  // Test by fetching repo info
+  fetch(`https://api.github.com/repos/${user}/${repo}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }
+  }).then(r => {
+    if (r.ok) {
+      st.textContent = `✓ Connected to ${user}/${repo}`;
+      updateGhButton(true);
+      loadGhHistory();
+    } else {
+      st.className = 'gh-status err';
+      st.textContent = r.status === 404
+        ? 'Repo not found — check the name.'
+        : r.status === 401
+        ? 'Token rejected — check permissions (needs repo scope).'
+        : `GitHub error ${r.status}`;
+    }
+  }).catch(() => {
+    st.className = 'gh-status err';
+    st.textContent = 'Could not reach GitHub — check your connection.';
+  });
+}
+
+function updateGhButton(connected) {
+  const btn = document.getElementById('gh-btn');
+  if (connected) {
+    btn.style.borderColor = '#2a6a42';
+    btn.style.color = '#6AAD7A';
+    btn.textContent = '⬡ GitHub ✓';
+  }
+}
+
+// GitHub API helpers
+async function ghGet(path) {
+  const {user, repo, token} = getGhConfig();
+  const r = await fetch(`https://api.github.com/repos/${user}/${repo}/contents/${path}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }
+  });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`GitHub GET ${r.status}`);
+  return r.json();
+}
+
+async function ghPut(path, content, message, sha) {
+  const {user, repo, token} = getGhConfig();
+  const body = {
+    message,
+    content: btoa(unescape(encodeURIComponent(JSON.stringify(content, null, 2)))),
+  };
+  if (sha) body.sha = sha;
+  const r = await fetch(`https://api.github.com/repos/${user}/${repo}/contents/${path}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) {
+    const err = await r.json();
+    throw new Error(err.message || `GitHub PUT ${r.status}`);
+  }
+  return r.json();
+}
+
+// Serialise the current plan to a plain object
+function serialisePlan() {
+  const weekKey = window._mondayDate.toISOString().slice(0, 10);
+  const out = { weekOf: weekKey, savedAt: new Date().toISOString(), days: {} };
+  DAYS.forEach((day, di) => {
+    out.days[day] = {};
+    MEAL_TYPES.forEach(t => {
+      const m = plan[di][t];
+      if (!m) return;
+      out.days[day][t] = {
+        id: m.id, name: m.name, cal: m.cal || 0,
+        protein: m.nutrition?.protein || 0,
+        carbs:   m.nutrition?.carbs   || 0,
+        fat:     m.nutrition?.fat     || 0,
+      };
+    });
+  });
+  return out;
+}
+
+// Save weekly plan + update history index
+async function saveToGithub() {
+  if (!isGhConnected()) return;
+  const weekKey = window._mondayDate.toISOString().slice(0, 10);
+  const planData = serialisePlan();
+
+  showGhSyncStatus('saving');
+
+  try {
+    // 1. Save/update the week file: data/week_YYYY-MM-DD.json
+    const weekPath = `data/week_${weekKey}.json`;
+    const existing = await ghGet(weekPath);
+    await ghPut(weekPath, planData,
+      `Plan: week of ${weekKey}`,
+      existing?.sha);
+
+    // 2. Save custom meals if any
+    const customMeals = {};
+    MEAL_TYPES.forEach(t => {
+      const customs = (MEALS[t] || []).filter(m => m.id.startsWith('custom_'));
+      if (customs.length) customMeals[t] = customs;
+    });
+    if (Object.keys(customMeals).length) {
+      const cmPath = 'data/custom_meals.json';
+      const cmExisting = await ghGet(cmPath);
+      await ghPut(cmPath, customMeals, 'Update custom meals', cmExisting?.sha);
+    }
+
+    // 3. Update history index: data/history.json
+    const histPath = 'data/history.json';
+    const histExisting = await ghGet(histPath);
+    let history = [];
+    if (histExisting) {
+      try { history = JSON.parse(atob(histExisting.content.replace(/\n/g,''))); } catch(e){}
+    }
+    // Upsert this week
+    const idx = history.findIndex(h => h.weekOf === weekKey);
+    const entry = {
+      weekOf: weekKey,
+      savedAt: planData.savedAt,
+      totalCal: DAYS.reduce((s,_,di) =>
+        s + MEAL_TYPES.reduce((s2,t) => s2 + (plan[di][t]?.cal||0), 0), 0),
+      avgDailyCal: Math.round(DAYS.reduce((s,_,di) =>
+        s + MEAL_TYPES.reduce((s2,t) => s2 + (plan[di][t]?.cal||0), 0), 0) / 7),
+    };
+    if (idx >= 0) history[idx] = entry; else history.unshift(entry);
+    history = history.slice(0, 52); // keep 1 year
+    await ghPut(histPath, history, `History index updated ${weekKey}`, histExisting?.sha);
+
+    showGhSyncStatus('ok');
+    loadGhHistory();
+  } catch(e) {
+    showGhSyncStatus('err', e.message);
+  }
+}
+
+function showGhSyncStatus(state, msg) {
+  const el = document.getElementById('gh-sync-status');
+  el.style.display = 'inline';
+  if (state === 'saving') {
+    el.style.color = 'var(--text3)';
+    el.textContent = '↑ Saving to GitHub…';
+  } else if (state === 'ok') {
+    el.style.color = '#6AAD7A';
+    el.textContent = '✓ Saved to GitHub';
+    setTimeout(() => { el.style.display = 'none'; }, 4000);
+  } else {
+    el.style.color = 'var(--rose-light)';
+    el.textContent = `⚠ GitHub: ${msg}`;
+  }
+}
+
+// Load history list into panel
+async function loadGhHistory() {
+  const container = document.getElementById('gh-history-list');
+  container.textContent = 'Loading…';
+  try {
+    const file = await ghGet('data/history.json');
+    if (!file) { container.textContent = 'No history yet — complete your first plan to start.'; return; }
+    const history = JSON.parse(atob(file.content.replace(/\n/g,'')));
+    if (!history.length) { container.textContent = 'No saved weeks yet.'; return; }
+    container.innerHTML = history.map(h =>
+      `<div class="gh-history-item">
+        <span class="wk">Week of ${h.weekOf}</span>
+        <span style="font-size:11px;color:var(--text3)">${h.avgDailyCal} kcal/day</span>
+        <button class="load-btn" onclick="loadWeekFromGithub('${h.weekOf}')">Load</button>
+      </div>`
+    ).join('');
+  } catch(e) {
+    container.textContent = 'Could not load history.';
+  }
+}
+
+// Load a past week's plan
+async function loadWeekFromGithub(weekKey) {
+  try {
+    const file = await ghGet(`data/week_${weekKey}.json`);
+    if (!file) { alert('Week not found.'); return; }
+    const data = JSON.parse(atob(file.content.replace(/\n/g,'')));
+
+    // Clear current plan
+    DAYS.forEach((_,di) => MEAL_TYPES.forEach(t => {
+      if (plan[di][t]) clearMeal({stopPropagation:()=>{}}, di, t);
+    }));
+
+    // Re-apply saved meals
+    DAYS.forEach((day, di) => {
+      MEAL_TYPES.forEach(t => {
+        const saved = data.days?.[day]?.[t];
+        if (!saved) return;
+        // Find meal in database by id
+        const meal = Object.values(MEALS).flat().find(m => m.id === saved.id)
+          || { ...saved, tags:['custom'], src:'', srcType:'simple', ingredients:[], steps:[], nutrition:{protein:saved.protein,carbs:saved.carbs,fat:saved.fat} };
+        setMeal(di, t, meal);
+      });
+    });
+
+    document.getElementById('gh-panel').classList.remove('open');
+    showToast(`Loaded week of ${weekKey}`);
+  } catch(e) {
+    alert('Could not load week: ' + e.message);
+  }
+}
+
+// Load custom meals from GitHub on startup
+async function loadCustomMealsFromGithub() {
+  if (!isGhConnected()) return;
+  try {
+    const file = await ghGet('data/custom_meals.json');
+    if (!file) return;
+    const customs = JSON.parse(atob(file.content.replace(/\n/g,'')));
+    Object.entries(customs).forEach(([type, meals]) => {
+      if (!MEALS[type]) MEALS[type] = [];
+      meals.forEach(m => {
+        if (!MEALS[type].find(x => x.id === m.id)) MEALS[type].unshift(m);
+      });
+    });
+  } catch(e) { /* silently ignore */ }
+}
+
+// Close panel on outside click
+document.addEventListener('click', e => {
+  const panel = document.getElementById('gh-panel');
+  const btn = document.getElementById('gh-btn');
+  if (panel.classList.contains('open') && !panel.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+    panel.classList.remove('open');
+  }
+});
+
+// Init: restore GitHub button state + load remote custom meals
+(function initGithub() {
+  if (isGhConnected()) {
+    updateGhButton(true);
+    loadCustomMealsFromGithub();
+  }
+})();
+
+</script>
+</body>
+</html>

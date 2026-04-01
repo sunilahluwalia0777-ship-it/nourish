@@ -1,0 +1,10 @@
+# ── Nourish local config — contains API keys, never commit ──
+config.js
+
+# ── OS junk ──
+.DS_Store
+Thumbs.db
+
+# ── Editor folders ──
+.vscode/
+.idea/
