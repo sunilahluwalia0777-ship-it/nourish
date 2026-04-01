@@ -1826,24 +1826,8 @@ Slice chicken, assemble bowl, drizzle dressing." style="width:100%;background:va
 <div class="toast" id="toast"></div>
 
 <script>
-// ── Keys injected by GitHub Actions from repository secrets ──
-// Placeholders below are replaced at deploy time — never commit real values here
-window.NOURISH_CONFIG = {
-  anthropicKey: '__ANTHROPIC_KEY__',
-  instacartKey: '__INSTACART_KEY__',
-  githubToken:  '__GH_TOKEN__',
-  githubUser:   '__GH_USER__',
-  githubRepo:   '__GH_REPO__',
-};
-// Apply to localStorage so all getKey() calls work immediately
-(function applyConfig() {
-  var cfg = window.NOURISH_CONFIG;
-  if (cfg.anthropicKey && !cfg.anthropicKey.startsWith('__')) localStorage.setItem('nk',       cfg.anthropicKey);
-  if (cfg.instacartKey && !cfg.instacartKey.startsWith('__')) localStorage.setItem('ic_key',   cfg.instacartKey);
-  if (cfg.githubToken  && !cfg.githubToken.startsWith('__'))  localStorage.setItem('gh_token', cfg.githubToken);
-  if (cfg.githubUser   && !cfg.githubUser.startsWith('__'))   localStorage.setItem('gh_user',  cfg.githubUser);
-  if (cfg.githubRepo   && !cfg.githubRepo.startsWith('__'))   localStorage.setItem('gh_repo',  cfg.githubRepo);
-})();
+// Keys are entered once via the API strip in the app and saved to localStorage.
+// They persist across sessions in this browser automatically.
 </script>
 
 <script>
