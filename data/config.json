@@ -1,10 +1,10 @@
 {
   "github": {
-    "user": "sunilahluwalia0777-ship-it",
+    "user": "Sunilahluwalia0777-ship-it",
     "repo": "nourish"
   },
   "anthropic": {
-    "key": "❌ Could not save to GitHub: 409: Repository rule violations found Secret detected in content"
+    "key": ""
   },
   "instacart": {
     "key": ""
@@ -22,7 +22,7 @@
     {
       "name": "Sunil",
       "emoji": "👨",
-      "dietary": "low carb"
+      "dietary": "balanced"
     }
   ]
 }
