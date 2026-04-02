@@ -679,7 +679,7 @@ function renderList() {
       const catItems = cats[cat];
       html += `<div class="cat-group"><div class="cat-label">${cat}</div>`;
       // Unchecked first
-      [...catItems].sort((a,b) => (a.checked?1:0)-(b.checked?1:0)).forEach(item => {
+      [...catItems].filter(i => !i.checked).forEach(item => {
         html += renderItem(item);
       });
       html += '</div>';
@@ -730,9 +730,11 @@ function setTab(store, el) {
 }
 
 function clearChecked() {
+  const count = items.filter(i => i.checked).length;
+  if (!count) { showToast('Nothing to clear'); return; }
   items = items.filter(i => !i.checked);
   render();
-  showToast('Checked items cleared');
+  showToast(`${count} item${count>1?'s':''} removed`);
 }
 
 function addManual() {
