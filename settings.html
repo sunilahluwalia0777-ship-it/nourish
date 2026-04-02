@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nourish — Settings</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #F2F2F7; --card: #fff; --border: #E5E5EA;
+  --text: #1C1C1E; --text2: #6C6C70; --text3: #AEAEB2;
+  --green: #00A650; --green-pale: #EDFAF3;
+  --red: #FF3B30; --red-pale: #FFF0EE;
+  --gold: #C8913A; --gold-pale: #FFF8EC;
+  --sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --radius: 14px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 60px; }
+
+header {
+  background: var(--text); color: #fff;
+  padding: 18px 24px; display: flex; align-items: center; justify-content: space-between;
+}
+.logo { font-size: 20px; font-weight: 700; }
+.logo span { color: var(--green); }
+.nav-links { display: flex; gap: 16px; }
+.nav-links a { color: #aaa; font-size: 13px; font-weight: 600; text-decoration: none; transition: color .15s; }
+.nav-links a:hover { color: #fff; }
+
+.page { max-width: 640px; margin: 0 auto; padding: 32px 20px; }
+.page-title { font-size: 28px; font-weight: 700; margin-bottom: 6px; }
+.page-sub { font-size: 14px; color: var(--text2); margin-bottom: 32px; line-height: 1.5; }
+
+/* Status banner */
+.status-banner {
+  padding: 14px 18px; border-radius: var(--radius);
+  font-size: 14px; font-weight: 600; margin-bottom: 24px;
+  display: none; align-items: center; gap: 10px;
+}
+.status-banner.ok { background: var(--green-pale); color: var(--green); display: flex; }
+.status-banner.err { background: var(--red-pale); color: var(--red); display: flex; }
+.status-banner.loading { background: var(--gold-pale); color: var(--gold); display: flex; }
+
+/* Section cards */
+.section {
+  background: var(--card); border-radius: var(--radius);
+  border: 1px solid var(--border); margin-bottom: 16px; overflow: hidden;
+}
+.section-header {
+  padding: 18px 20px 14px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 12px;
+}
+.section-icon { font-size: 22px; }
+.section-title { font-size: 16px; font-weight: 700; }
+.section-sub { font-size: 12px; color: var(--text2); margin-top: 1px; }
+.section-body { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+
+/* Fields */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-size: 12px; font-weight: 700; color: var(--text2); letter-spacing: 0.4px; text-transform: uppercase; }
+.field input, .field select {
+  width: 100%; padding: 11px 14px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+  font-family: var(--sans); font-size: 15px; color: var(--text); outline: none;
+  transition: border-color .15s;
+}
+.field input:focus, .field select:focus { border-color: var(--green); }
+.field input::placeholder { color: var(--text3); }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* Token display */
+.token-wrap { position: relative; }
+.token-wrap input { padding-right: 80px; font-family: monospace; font-size: 13px; }
+.token-toggle {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  background: var(--border); border: none; border-radius: 6px;
+  padding: 4px 10px; font-size: 12px; color: var(--text2);
+  cursor: pointer; font-family: var(--sans); font-weight: 600;
+}
+
+/* Users list */
+.users-list { display: flex; flex-direction: column; gap: 8px; }
+.user-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg); border-radius: 10px; padding: 10px 12px;
+  border: 1px solid var(--border);
+}
+.user-emoji { font-size: 22px; cursor: pointer; }
+.user-name-input {
+  flex: 1; border: none; background: transparent;
+  font-family: var(--sans); font-size: 14px; font-weight: 600; color: var(--text);
+  outline: none;
+}
+.user-dietary {
+  border: none; background: var(--card); border-radius: 8px; padding: 4px 8px;
+  font-family: var(--sans); font-size: 12px; color: var(--text2); outline: none;
+  border: 1px solid var(--border);
+}
+.user-del {
+  background: none; border: none; color: var(--text3); font-size: 16px;
+  cursor: pointer; padding: 0 4px; transition: color .15s;
+}
+.user-del:hover { color: var(--red); }
+.add-user-btn {
+  background: none; border: 1.5px dashed var(--border); border-radius: 10px;
+  padding: 10px; color: var(--text3); font-family: var(--sans); font-size: 13px;
+  font-weight: 600; cursor: pointer; transition: all .15s; width: 100%;
+}
+.add-user-btn:hover { border-color: var(--green); color: var(--green); }
+
+/* Stores */
+.stores-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.store-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 20px; border: 1.5px solid var(--border);
+  background: var(--bg); font-family: var(--sans); font-size: 13px;
+  font-weight: 600; color: var(--text2); cursor: pointer; transition: all .15s;
+}
+.store-chip.active { background: var(--green-pale); border-color: var(--green); color: var(--green); }
+.store-chip input[type=checkbox] { display: none; }
+
+/* Save button */
+.save-btn {
+  width: 100%; height: 54px; background: var(--text); color: #fff;
+  font-family: var(--sans); font-size: 16px; font-weight: 700;
+  border: none; border-radius: var(--radius); cursor: pointer;
+  transition: opacity .15s; margin-top: 8px;
+}
+.save-btn:hover { opacity: .85; }
+.save-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Connection indicator */
+.conn-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--text3);
+  display: inline-block; margin-right: 4px;
+}
+.conn-dot.ok { background: var(--green); }
+.conn-dot.err { background: var(--red); }
+
+.hint { font-size: 12px; color: var(--text3); line-height: 1.5; }
+.hint a { color: var(--green); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Nouri<span>sh</span></div>
+  <div class="nav-links">
+    <a href="index.html">🌿 Meal Planner</a>
+    <a href="grocery.html">🛒 Grocery</a>
+    <a href="settings.html">⚙ Settings</a>
+  </div>
+</header>
+
+<div class="page">
+  <div class="page-title">Settings</div>
+  <div class="page-sub">Configure once — all apps (Nourish, Grocery) read from here automatically.</div>
+
+  <div class="status-banner" id="status-banner"></div>
+
+  <!-- GitHub -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">⬡</div>
+      <div>
+        <div class="section-title">GitHub <span class="conn-dot" id="gh-dot"></span><span id="gh-conn-label" style="font-size:12px;color:var(--text3)">not connected</span></div>
+        <div class="section-sub">Stores your plans, grocery lists and config</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <div class="field-row">
+        <div class="field">
+          <label>Username</label>
+          <input id="gh-user" type="text" placeholder="your-github-username" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Repository</label>
+          <input id="gh-repo" type="text" placeholder="nourish" autocomplete="off">
+        </div>
+      </div>
+      <div class="field">
+        <label>Personal Access Token <a href="https://github.com/settings/tokens/new?scopes=repo&description=Nourish+App" target="_blank" style="color:var(--green);font-size:11px;text-decoration:none;margin-left:6px;font-weight:400">Create new →</a></label>
+        <div class="token-wrap">
+          <input id="gh-token" type="password" placeholder="ghp_…" autocomplete="off">
+          <button class="token-toggle" onclick="toggleToken()">Show</button>
+        </div>
+        <div class="hint">Needs <strong>repo</strong> scope. Stored in your browser's localStorage — never sent anywhere except GitHub.</div>
+      </div>
+      <button onclick="testGitHub()" style="background:var(--green-pale);border:1px solid rgba(0,166,80,.3);color:var(--green);font-family:var(--sans);font-size:13px;font-weight:700;padding:9px 18px;border-radius:9px;cursor:pointer;width:fit-content">Test connection</button>
+    </div>
+  </div>
+
+  <!-- Anthropic -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">🤖</div>
+      <div>
+        <div class="section-title">Anthropic API</div>
+        <div class="section-sub">Powers grocery list generation</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <div class="field">
+        <label>API Key <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--green);font-size:11px;text-decoration:none;margin-left:6px;font-weight:400">Get key →</a></label>
+        <div class="token-wrap">
+          <input id="ant-key" type="password" placeholder="sk-ant-api03-…" autocomplete="off">
+          <button class="token-toggle" onclick="toggleAnt()">Show</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Instacart -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">🛒</div>
+      <div>
+        <div class="section-title">Instacart API <span style="font-size:11px;color:var(--text3);font-weight:400">(optional)</span></div>
+        <div class="section-sub">Sends grocery items directly to an Instacart cart</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <div class="field">
+        <label>API Key <a href="https://www.instacart.com/company/business/developers" target="_blank" style="color:var(--green);font-size:11px;text-decoration:none;margin-left:6px;font-weight:400">Get key →</a></label>
+        <div class="token-wrap">
+          <input id="ic-key" type="password" placeholder="Optional" autocomplete="off">
+          <button class="token-toggle" onclick="toggleIc()">Show</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preferences -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">🌿</div>
+      <div>
+        <div class="section-title">Meal preferences</div>
+        <div class="section-sub">Defaults used by the Nourish planner</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <div class="field-row">
+        <div class="field">
+          <label>Servings per meal</label>
+          <select id="servings">
+            <option value="1">1 person</option>
+            <option value="2" selected>2 people</option>
+            <option value="4">4 people</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Default cook time</label>
+          <select id="cook-time">
+            <option value="15">Under 15 min</option>
+            <option value="30" selected>Under 30 min</option>
+            <option value="45">Under 45 min</option>
+            <option value="60">Up to 1 hour</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Allergies / avoid</label>
+        <input id="avoids" type="text" placeholder="e.g. gluten, dairy, nuts">
+      </div>
+    </div>
+  </div>
+
+  <!-- Stores -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">🏪</div>
+      <div>
+        <div class="section-title">Your stores</div>
+        <div class="section-sub">Used by the Grocery app for item assignment</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <div class="stores-grid" id="stores-grid"></div>
+      <div class="hint">Tap to toggle. Items are auto-assigned based on what they are.</div>
+    </div>
+  </div>
+
+  <!-- Family members -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">👨‍👩‍👧</div>
+      <div>
+        <div class="section-title">Family members</div>
+        <div class="section-sub">Dietary preferences per person</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <div class="users-list" id="users-list"></div>
+      <button class="add-user-btn" onclick="addUser()">+ Add family member</button>
+    </div>
+  </div>
+
+  <button class="save-btn" id="save-btn" onclick="saveAll()">Save all settings</button>
+</div>
+
+<script>
+// ── BOOTSTRAP TOKEN ────────────────────────────────────────────────────────
+// This token is used ONLY to read/write data/config.json in your repo.
+// It is the one credential that needs to be here — everything else is stored
+// in config.json and read by all apps dynamically.
+//
+// To set it: open browser console on this page and run:
+//   localStorage.setItem('bootstrap_token', 'ghp_yourtoken')
+// Or enter it manually in the GitHub section below.
+//
+const BOOTSTRAP_TOKEN = localStorage.getItem('bootstrap_token') || '';
+
+const ALL_STORES = [
+  { id:'costco',    label:'Costco',       icon:'🏪' },
+  { id:'safeway',   label:'Safeway',      icon:'🌿' },
+  { id:'instacart', label:'Instacart',    icon:'🚗' },
+  { id:'indian',    label:'Indian Shop',  icon:'🌶' },
+  { id:'wholefoods',label:'Whole Foods',  icon:'🍃' },
+  { id:'target',    label:'Target',       icon:'🎯' },
+];
+
+const EMOJIS = ['👨','👩','👦','👧','👴','👵','🧑'];
+
+let config = {
+  github: { user:'', repo:'', token:'' },
+  anthropic: { key:'' },
+  instacart: { key:'' },
+  servings: 2,
+  cookTime: 30,
+  avoids: '',
+  stores: ['costco','safeway','instacart','indian'],
+  users: [{ name:'', emoji:'👨', dietary:'balanced' }],
+};
+
+// ── INIT ───────────────────────────────────────────────────────────────────
+(async function init() {
+  buildStoresGrid();
+  buildUsersList();
+
+  // Try to load config from GitHub first
+  const token = BOOTSTRAP_TOKEN || localStorage.getItem('gh_token') || '';
+  const user  = localStorage.getItem('gh_user') || '';
+  const repo  = localStorage.getItem('gh_repo') || '';
+
+  if (token && user && repo) {
+    await loadConfigFromGithub(user, repo, token);
+  } else {
+    // Load from localStorage fallback
+    loadFromLocalStorage();
+  }
+  populateForm();
+})();
+
+// ── GITHUB ─────────────────────────────────────────────────────────────────
+async function loadConfigFromGithub(user, repo, token) {
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${user}/${repo}/contents/data/config.json`,
+      { headers: { Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json' } }
+    );
+    if (r.ok) {
+      const file = await r.json();
+      const loaded = JSON.parse(atob(file.content.replace(/\n/g,'')));
+      config = { ...config, ...loaded };
+      // Always use the token that worked
+      config.github.token = token;
+      config.github.user  = user;
+      config.github.repo  = repo;
+      setGhStatus(true, `Connected to ${user}/${repo}`);
+    }
+  } catch(e) { /* silently fall back to localStorage */ }
+}
+
+function loadFromLocalStorage() {
+  const t = BOOTSTRAP_TOKEN || localStorage.getItem('gh_token') || '';
+  config.github.token = t;
+  config.github.user  = localStorage.getItem('gh_user') || '';
+  config.github.repo  = localStorage.getItem('gh_repo') || 'nourish';
+  config.anthropic.key = localStorage.getItem('nk') || '';
+  config.instacart.key = localStorage.getItem('ic_key') || '';
+}
+
+async function testGitHub() {
+  const user  = document.getElementById('gh-user').value.trim();
+  const repo  = document.getElementById('gh-repo').value.trim();
+  const token = document.getElementById('gh-token').value.trim();
+  if (!user || !repo || !token) { showStatus('err','Fill in all three GitHub fields first'); return; }
+  showStatus('loading','Testing connection…');
+  try {
+    const r = await fetch(`https://api.github.com/repos/${user}/${repo}`,
+      { headers:{ Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json' } });
+    if (r.ok) {
+      const data = await r.json();
+      setGhStatus(true, `Connected · ${data.full_name}`);
+      showStatus('ok',`✓ Connected to ${data.full_name}`);
+      // Save bootstrap token so we can load config next time
+      localStorage.setItem('bootstrap_token', token);
+      localStorage.setItem('gh_user', user);
+      localStorage.setItem('gh_repo', repo);
+      localStorage.setItem('gh_token', token);
+    } else {
+      const status = r.status;
+      setGhStatus(false,'');
+      if (status===401) showStatus('err','❌ Token invalid — check it was copied correctly');
+      else if (status===404) showStatus('err','❌ Repo not found — check username and repo name');
+      else showStatus('err',`❌ GitHub error ${status}`);
+    }
+  } catch(e) { showStatus('err','❌ Network error: ' + e.message); }
+}
+
+async function saveConfigToGithub(cfg) {
+  const {user, repo, token} = cfg.github;
+  if (!user || !repo || !token) return false;
+
+  // Don't save raw token to the config file — it stays in localStorage only
+  const safeConfig = JSON.parse(JSON.stringify(cfg));
+  delete safeConfig.github.token;
+
+  const path = 'data/config.json';
+  // Get existing SHA if file exists
+  let sha = undefined;
+  try {
+    const r = await fetch(`https://api.github.com/repos/${user}/${repo}/contents/${path}`,
+      { headers:{ Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json' } });
+    if (r.ok) { const f = await r.json(); sha = f.sha; }
+  } catch(e) {}
+
+  const body = { message:'Update config', content: btoa(unescape(encodeURIComponent(JSON.stringify(safeConfig, null, 2)))) };
+  if (sha) body.sha = sha;
+
+  const r = await fetch(`https://api.github.com/repos/${user}/${repo}/contents/${path}`, {
+    method:'PUT',
+    headers:{ Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json', 'Content-Type':'application/json' },
+    body: JSON.stringify(body)
+  });
+  return r.ok;
+}
+
+// ── FORM ───────────────────────────────────────────────────────────────────
+function populateForm() {
+  document.getElementById('gh-user').value    = config.github?.user  || '';
+  document.getElementById('gh-repo').value    = config.github?.repo  || 'nourish';
+  document.getElementById('gh-token').value   = config.github?.token || BOOTSTRAP_TOKEN || '';
+  document.getElementById('ant-key').value    = config.anthropic?.key || '';
+  document.getElementById('ic-key').value     = config.instacart?.key || '';
+  document.getElementById('servings').value   = config.servings || 2;
+  document.getElementById('cook-time').value  = config.cookTime || 30;
+  document.getElementById('avoids').value     = config.avoids || '';
+  buildStoresGrid(config.stores || ['costco','safeway','instacart','indian']);
+  buildUsersList(config.users || []);
+  if (config.github?.user) setGhStatus(true, `${config.github.user}/${config.github.repo}`);
+}
+
+async function saveAll() {
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  config.github.user  = document.getElementById('gh-user').value.trim();
+  config.github.repo  = document.getElementById('gh-repo').value.trim();
+  config.github.token = document.getElementById('gh-token').value.trim();
+  config.anthropic.key = document.getElementById('ant-key').value.trim();
+  config.instacart.key = document.getElementById('ic-key').value.trim();
+  config.servings  = parseInt(document.getElementById('servings').value);
+  config.cookTime  = parseInt(document.getElementById('cook-time').value);
+  config.avoids    = document.getElementById('avoids').value.trim();
+  config.stores    = Array.from(document.querySelectorAll('.store-chip.active')).map(c => c.dataset.store);
+  config.users     = readUsers();
+
+  // Always save token to localStorage (never to GitHub)
+  localStorage.setItem('bootstrap_token', config.github.token);
+  localStorage.setItem('gh_user',  config.github.user);
+  localStorage.setItem('gh_repo',  config.github.repo);
+  localStorage.setItem('gh_token', config.github.token);
+  localStorage.setItem('nk',       config.anthropic.key);
+  localStorage.setItem('ic_key',   config.instacart.key);
+
+  // Save config.json to GitHub (without token)
+  const ok = await saveConfigToGithub(config);
+
+  btn.disabled = false; btn.textContent = 'Save all settings';
+  if (ok) {
+    showStatus('ok', '✓ Saved to GitHub — all apps will pick up the new settings');
+  } else if (!config.github.token) {
+    showStatus('err', 'GitHub not connected — settings saved to this browser only');
+  } else {
+    showStatus('err', '❌ Could not save to GitHub — check your token and connection');
+  }
+}
+
+// ── STORES GRID ────────────────────────────────────────────────────────────
+function buildStoresGrid(active = ['costco','safeway','instacart','indian']) {
+  const grid = document.getElementById('stores-grid');
+  grid.innerHTML = ALL_STORES.map(s => `
+    <label class="store-chip${active.includes(s.id)?' active':''}" data-store="${s.id}" onclick="toggleStore(this)">
+      ${s.icon} ${s.label}
+    </label>`).join('');
+}
+function toggleStore(el) { el.classList.toggle('active'); }
+
+// ── USERS ──────────────────────────────────────────────────────────────────
+function buildUsersList(users = [{ name:'', emoji:'👨', dietary:'balanced' }]) {
+  const list = document.getElementById('users-list');
+  list.innerHTML = users.map((u,i) => `
+    <div class="user-row" id="user-${i}">
+      <span class="user-emoji" onclick="cycleEmoji(${i})" title="Tap to change">${u.emoji||'👨'}</span>
+      <input class="user-name-input" type="text" placeholder="Name" value="${u.name||''}">
+      <select class="user-dietary">
+        ${['balanced','vegetarian','vegan','high protein','low carb'].map(d =>
+          `<option${u.dietary===d?' selected':''}>${d}</option>`).join('')}
+      </select>
+      <button class="user-del" onclick="removeUser(${i})">✕</button>
+    </div>`).join('');
+}
+
+function addUser() {
+  const users = readUsers();
+  users.push({ name:'', emoji: EMOJIS[users.length % EMOJIS.length], dietary:'balanced' });
+  buildUsersList(users);
+}
+
+function removeUser(i) {
+  const users = readUsers();
+  users.splice(i, 1);
+  buildUsersList(users);
+}
+
+function cycleEmoji(i) {
+  const row = document.getElementById('user-${i}');
+  const span = document.querySelector(`#user-${i} .user-emoji`);
+  const current = EMOJIS.indexOf(span.textContent);
+  span.textContent = EMOJIS[(current+1) % EMOJIS.length];
+}
+
+function readUsers() {
+  return Array.from(document.querySelectorAll('.user-row')).map(row => ({
+    name:    row.querySelector('.user-name-input').value.trim(),
+    emoji:   row.querySelector('.user-emoji').textContent,
+    dietary: row.querySelector('.user-dietary').value,
+  }));
+}
+
+// ── UI UTILS ───────────────────────────────────────────────────────────────
+function setGhStatus(ok, label) {
+  const dot = document.getElementById('gh-dot');
+  const lbl = document.getElementById('gh-conn-label');
+  dot.className = 'conn-dot ' + (ok?'ok':'err');
+  lbl.textContent = label;
+  lbl.style.color = ok ? 'var(--green)' : 'var(--red)';
+}
+function showStatus(type, msg) {
+  const el = document.getElementById('status-banner');
+  el.className = 'status-banner ' + type;
+  el.textContent = msg;
+  el.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  if (type === 'ok') setTimeout(() => el.className = 'status-banner', 4000);
+}
+function toggleToken() {
+  const inp = document.getElementById('gh-token');
+  const btn = inp.nextElementSibling;
+  inp.type = inp.type==='password' ? 'text' : 'password';
+  btn.textContent = inp.type==='password' ? 'Show' : 'Hide';
+}
+function toggleAnt() {
+  const inp = document.getElementById('ant-key');
+  const btn = inp.nextElementSibling;
+  inp.type = inp.type==='password' ? 'text' : 'password';
+  btn.textContent = inp.type==='password' ? 'Show' : 'Hide';
+}
+function toggleIc() {
+  const inp = document.getElementById('ic-key');
+  const btn = inp.nextElementSibling;
+  inp.type = inp.type==='password' ? 'text' : 'password';
+  btn.textContent = inp.type==='password' ? 'Show' : 'Hide';
+}
+</script>
+</body>
+</html>
