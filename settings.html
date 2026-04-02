@@ -414,9 +414,11 @@ async function saveConfigToGithub(cfg) {
   const {user, repo, token} = cfg.github;
   if (!user || !repo || !token) return {ok:false, err:'Missing GitHub credentials'};
 
-  // Token never goes to GitHub — stays in localStorage only
+  // Strip ALL API keys — they stay in localStorage only, never in GitHub
   const safeConfig = JSON.parse(JSON.stringify(cfg));
   delete safeConfig.github.token;
+  if (safeConfig.anthropic) safeConfig.anthropic.key = '';
+  if (safeConfig.instacart) safeConfig.instacart.key = '';
 
   // Robust base64 encoding that handles all unicode characters
   const toBase64 = (str) => {
@@ -473,9 +475,10 @@ async function saveConfigToGithub(cfg) {
 function populateForm() {
   document.getElementById('gh-user').value    = config.github?.user  || '';
   document.getElementById('gh-repo').value    = config.github?.repo  || 'nourish';
-  document.getElementById('gh-token').value   = config.github?.token || BOOTSTRAP_TOKEN || '';
-  document.getElementById('ant-key').value    = config.anthropic?.key || '';
-  document.getElementById('ic-key').value     = config.instacart?.key || '';
+  document.getElementById('gh-token').value   = config.github?.token || BOOTSTRAP_TOKEN || localStorage.getItem('gh_token') || '';
+  // Keys come from localStorage (never stored in config.json on GitHub)
+  document.getElementById('ant-key').value    = localStorage.getItem('nk') || '';
+  document.getElementById('ic-key').value     = localStorage.getItem('ic_key') || '';
   document.getElementById('servings').value   = config.servings || 2;
   document.getElementById('cook-time').value  = config.cookTime || 30;
   document.getElementById('avoids').value     = config.avoids || '';
@@ -499,20 +502,24 @@ async function saveAll() {
   config.stores    = Array.from(document.querySelectorAll('.store-chip.active')).map(c => c.dataset.store);
   config.users     = readUsers();
 
-  // Always save token to localStorage (never to GitHub)
+  // Keys ONLY go to localStorage — never to GitHub (secret scanning blocks them)
   localStorage.setItem('bootstrap_token', config.github.token);
   localStorage.setItem('gh_user',  config.github.user);
   localStorage.setItem('gh_repo',  config.github.repo);
   localStorage.setItem('gh_token', config.github.token);
   localStorage.setItem('nk',       config.anthropic.key);
   localStorage.setItem('ic_key',   config.instacart.key);
+  // Also mirror under shop_ keys so grocery app picks them up
+  localStorage.setItem('shop_gh_user',  config.github.user);
+  localStorage.setItem('shop_gh_repo',  config.github.repo);
+  localStorage.setItem('shop_gh_token', config.github.token);
 
   // Save config.json to GitHub (without token)
   const result = await saveConfigToGithub(config);
 
   btn.disabled = false; btn.textContent = 'Save all settings';
   if (result.ok) {
-    showStatus('ok', '✓ Saved to GitHub — all apps will pick up the new settings');
+    showStatus('ok', '✓ Preferences saved to GitHub · API keys saved to this browser');
   } else if (!config.github.token) {
     showStatus('err', 'GitHub not connected — settings saved to this browser only');
   } else {
