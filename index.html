@@ -1626,6 +1626,8 @@ a.src-link-back:hover { background: #303028; color: var(--gold-light); }
   <div class="header-actions">
     <span class="week-tag" id="week-tag"></span>
     <span id="gh-sync-status" style="font-size:11px;color:#6AAD7A;display:none">✓ Saved to GitHub</span>
+    <a href="settings.html" class="hbtn" style="text-decoration:none">⚙ Settings</a>
+    <a href="settings.html" class="hbtn" style="text-decoration:none;display:flex;align-items:center">⚙</a>
     <button class="hbtn" id="gh-btn" onclick="openGithubPanel()" title="GitHub sync settings">⬡ GitHub</button>
     <button class="hbtn" onclick="exportToExcel()">↓ Export</button>
     <button class="hbtn" onclick="clearAll()">Clear</button>
@@ -3296,6 +3298,37 @@ document.addEventListener('click', e => {
     loadCustomMealsFromGithub();
   }
 })();
+
+
+// ── Load config.json from GitHub (written by settings.html) ────────────────
+async function loadSharedConfig() {
+  const user  = localStorage.getItem('gh_user')  || localStorage.getItem('shop_gh_user')  || '';
+  const repo  = localStorage.getItem('gh_repo')  || localStorage.getItem('shop_gh_repo')  || '';
+  const token = localStorage.getItem('gh_token') || localStorage.getItem('shop_gh_token') ||
+                localStorage.getItem('bootstrap_token') || '';
+  if (!user || !repo || !token) return;
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${user}/${repo}/contents/data/config.json`,
+      { headers: { Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json' } }
+    );
+    if (!r.ok) return;
+    const file = await r.json();
+    const cfg = JSON.parse(atob(file.content.replace(/\n/g,'')));
+    if (cfg.anthropic?.key)  localStorage.setItem('nk',       cfg.anthropic.key);
+    if (cfg.instacart?.key)  localStorage.setItem('ic_key',   cfg.instacart.key);
+    if (cfg.github?.user)    localStorage.setItem('gh_user',  cfg.github.user);
+    if (cfg.github?.repo)    localStorage.setItem('gh_repo',  cfg.github.repo);
+    if (cfg.servings && document.getElementById('servings'))
+      document.getElementById('servings').value = cfg.servings;
+    if (cfg.cookTime && document.getElementById('cook-time'))
+      document.getElementById('cook-time').value = cfg.cookTime;
+    if (cfg.avoids && document.getElementById('avoids'))
+      document.getElementById('avoids').value = cfg.avoids;
+    console.log('Config loaded from GitHub');
+  } catch(e) { console.log('Config load skipped:', e.message); }
+}
+loadSharedConfig();
 
 </script>
 </body>
