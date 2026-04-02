@@ -412,30 +412,61 @@ async function testGitHub() {
 
 async function saveConfigToGithub(cfg) {
   const {user, repo, token} = cfg.github;
-  if (!user || !repo || !token) return false;
+  if (!user || !repo || !token) return {ok:false, err:'Missing GitHub credentials'};
 
-  // Don't save raw token to the config file — it stays in localStorage only
+  // Token never goes to GitHub — stays in localStorage only
   const safeConfig = JSON.parse(JSON.stringify(cfg));
   delete safeConfig.github.token;
 
+  // Robust base64 encoding that handles all unicode characters
+  const toBase64 = (str) => {
+    const bytes = new TextEncoder().encode(str);
+    let binary = '';
+    bytes.forEach(b => binary += String.fromCharCode(b));
+    return btoa(binary);
+  };
+
   const path = 'data/config.json';
-  // Get existing SHA if file exists
+  const headers = { Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json', 'Content-Type':'application/json' };
+  const apiUrl = `https://api.github.com/repos/${user}/${repo}/contents/${path}`;
+
+  // Get existing SHA (needed to update an existing file)
   let sha = undefined;
   try {
-    const r = await fetch(`https://api.github.com/repos/${user}/${repo}/contents/${path}`,
-      { headers:{ Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json' } });
-    if (r.ok) { const f = await r.json(); sha = f.sha; }
-  } catch(e) {}
+    const getResp = await fetch(apiUrl, { headers });
+    if (getResp.ok) {
+      const existing = await getResp.json();
+      sha = existing.sha;
+      console.log('Existing config.json found, SHA:', sha);
+    } else if (getResp.status === 404) {
+      console.log('config.json does not exist yet — will create');
+    } else {
+      const errData = await getResp.json();
+      return {ok:false, err:`GET failed ${getResp.status}: ${errData.message}`};
+    }
+  } catch(e) {
+    return {ok:false, err:'Network error checking file: ' + e.message};
+  }
 
-  const body = { message:'Update config', content: btoa(unescape(encodeURIComponent(JSON.stringify(safeConfig, null, 2)))) };
+  const body = {
+    message: 'Nourish: update config',
+    content: toBase64(JSON.stringify(safeConfig, null, 2)),
+  };
   if (sha) body.sha = sha;
 
-  const r = await fetch(`https://api.github.com/repos/${user}/${repo}/contents/${path}`, {
-    method:'PUT',
-    headers:{ Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json', 'Content-Type':'application/json' },
-    body: JSON.stringify(body)
-  });
-  return r.ok;
+  try {
+    const putResp = await fetch(apiUrl, { method:'PUT', headers, body: JSON.stringify(body) });
+    const putData = await putResp.json();
+    if (putResp.ok) {
+      console.log('config.json saved successfully');
+      return {ok:true};
+    } else {
+      console.error('PUT failed:', putData);
+      return {ok:false, err:`${putResp.status}: ${putData.message}`};
+    }
+  } catch(e) {
+    return {ok:false, err:'Network error saving: ' + e.message};
+  }
 }
 
 // ── FORM ───────────────────────────────────────────────────────────────────
@@ -477,15 +508,15 @@ async function saveAll() {
   localStorage.setItem('ic_key',   config.instacart.key);
 
   // Save config.json to GitHub (without token)
-  const ok = await saveConfigToGithub(config);
+  const result = await saveConfigToGithub(config);
 
   btn.disabled = false; btn.textContent = 'Save all settings';
-  if (ok) {
+  if (result.ok) {
     showStatus('ok', '✓ Saved to GitHub — all apps will pick up the new settings');
   } else if (!config.github.token) {
     showStatus('err', 'GitHub not connected — settings saved to this browser only');
   } else {
-    showStatus('err', '❌ Could not save to GitHub — check your token and connection');
+    showStatus('err', `❌ Could not save to GitHub: ${result.err || 'unknown error'}`);
   }
 }
 
