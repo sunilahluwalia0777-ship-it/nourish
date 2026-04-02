@@ -279,6 +279,16 @@ async function saveToGithub() {
       `Plan: week of ${weekKey}`,
       existing?.sha);
 
+    // 1b. Save grocery_current.json so the Shopping app can read it
+    if (window._lastGroceries) {
+      const grocPath = 'data/grocery_current.json';
+      const grocExisting = await ghGet(grocPath);
+      await ghPut(grocPath,
+        { weekOf: weekKey, savedAt: new Date().toISOString(), groceries: window._lastGroceries },
+        `Groceries: week of ${weekKey}`,
+        grocExisting?.sha);
+    }
+
     // 2. Save custom meals if any
     const customMeals = {};
     MEAL_TYPES.forEach(t => {
@@ -2414,7 +2424,9 @@ async function planningComplete() {
     const data = await resp.json();
     if (!resp.ok) throw new Error(data?.error?.message||`API ${resp.status}`);
     const raw = data.content.map(c=>c.text||'').join('').replace(/^```[\w]*\n?/,'').replace(/\n?```$/,'').trim();
-    renderGroceries(JSON.parse(raw));
+    const groceries = JSON.parse(raw);
+    window._lastGroceries = groceries;
+    renderGroceries(groceries);
     // Auto-save to GitHub after grocery list generated
     saveToGithub();
   } catch(e) { alert(`Error: ${e.message}`); }
@@ -3133,6 +3145,16 @@ async function saveToGithub() {
     await ghPut(weekPath, planData,
       `Plan: week of ${weekKey}`,
       existing?.sha);
+
+    // 1b. Save grocery_current.json so the Shopping app can read it
+    if (window._lastGroceries) {
+      const grocPath = 'data/grocery_current.json';
+      const grocExisting = await ghGet(grocPath);
+      await ghPut(grocPath,
+        { weekOf: weekKey, savedAt: new Date().toISOString(), groceries: window._lastGroceries },
+        `Groceries: week of ${weekKey}`,
+        grocExisting?.sha);
+    }
 
     // 2. Save custom meals if any
     const customMeals = {};
