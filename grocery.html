@@ -679,7 +679,7 @@ function renderList() {
       const catItems = cats[cat];
       html += `<div class="cat-group"><div class="cat-label">${cat}</div>`;
       // Unchecked first
-      [...catItems].filter(i => !i.checked).forEach(item => {
+      [...catItems].sort((a,b) => (a.checked?1:0)-(b.checked?1:0)).forEach(item => {
         html += renderItem(item);
       });
       html += '</div>';
@@ -710,7 +710,19 @@ function toggleCheck(id) {
   const item = items.find(i => i.id === id);
   if (!item) return;
   item.checked = !item.checked;
-  render();
+  // Update in place — no full re-render flicker
+  const el = document.getElementById("gi-" + id);
+  if (el) {
+    el.classList.toggle("checked", item.checked);
+    el.querySelector(".check-circle").textContent = item.checked ? "✓" : "";
+    el.querySelector(".item-name").style.textDecoration = item.checked ? "line-through" : "";
+    // Move to bottom of its category group
+    if (item.checked) el.parentElement.appendChild(el);
+    else el.parentElement.prepend(el);
+  }
+  updateCounts();
+  updateProgress();
+  saveLocal();
 }
 
 function cycleStore(id) {
