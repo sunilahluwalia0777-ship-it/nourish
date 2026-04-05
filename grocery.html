@@ -185,28 +185,29 @@ body {
   background: var(--bg);
 }
 
-/* ── Grocery item — compact list row ── */
-.g-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px 7px 8px;
-  border-bottom: 1px solid var(--border);
-  transition: opacity .2s;
-  min-height: 38px;
+.g-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
 }
-.g-item:last-child { border-bottom: none; }
-.g-item.checked { opacity: .4; }
-.g-item.checked .item-name { text-decoration: line-through; color: var(--text3); }
+.g-table td {
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.g-table tr:last-child td { border-bottom: none; }
+.g-table tr.checked { opacity: .4; }
+.g-table tr.checked .item-name { text-decoration: line-through; color: var(--text3); }
+
+.col-check { width: 34px; }
+.col-name  { }
+.col-qty   { width: 86px; }
+.col-store { width: 86px; text-align: right; padding-right: 8px; }
 
 .check-zone {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  cursor: pointer;
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; margin: 0 auto;
 }
 .check-circle {
   width: 18px; height: 18px;
@@ -216,9 +217,8 @@ body {
   transition: all .2s;
   font-size: 10px;
   color: transparent;
-  flex-shrink: 0;
 }
-.g-item.checked .check-circle {
+.g-table tr.checked .check-circle {
   background: var(--instacart);
   border-color: var(--instacart);
   color: #fff;
@@ -228,48 +228,36 @@ body {
   font-size: 14px;
   font-weight: 500;
   color: var(--text);
-  line-height: 1.2;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Editable quantity field */
-.item-left {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-}
 .item-qty-input {
-  width: 80px;
+  width: 100%;
   font-family: var(--sans);
   font-size: 12px;
-  color: var(--text3);
+  color: var(--text2);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 6px;
-  padding: 2px 4px;
-  text-align: left;
+  padding: 3px 5px;
   transition: all .15s;
-  flex-shrink: 0;
-  white-space: nowrap;
 }
 .item-qty-input:hover { border-color: var(--border); background: var(--bg); }
 .item-qty-input:focus { border-color: var(--instacart); outline: none; background: var(--card); color: var(--text); }
-.item-qty-input::placeholder { color: var(--text3); font-style: italic; }
+.item-qty-input::placeholder { color: var(--text3); font-style: italic; font-size: 11px; }
 
-/* Store pill — tap to cycle store */
 .store-pill {
-  padding: 2px 7px;
+  padding: 2px 8px;
   border-radius: 10px;
   font-size: 10px;
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
-  flex-shrink: 0;
-  transition: all .15s;
   border: none;
   font-family: var(--sans);
+  transition: all .15s;
 }
 .store-pill:active { transform: scale(.94); }
 .store-pill[data-store="costco"]     { background: var(--costco-pale);     color: var(--costco); }
@@ -277,6 +265,12 @@ body {
 .store-pill[data-store="instacart"]  { background: var(--instacart-pale);  color: var(--instacart); }
 .store-pill[data-store="indian"]     { background: var(--indian-pale);     color: var(--indian); }
 .store-pill[data-store="unassigned"] { background: var(--unassigned-pale); color: var(--unassigned); }
+
+@media (max-width: 480px) {
+  .col-qty   { width: 65px; }
+  .col-store { width: 70px; }
+  .item-name { font-size: 13px; }
+}
 
 /* ── Bottom action bar ── */
 .bottom-bar {
@@ -697,12 +691,8 @@ function renderList() {
   } else {
     sortedCats.forEach(cat => {
       const catItems = cats[cat];
-      html += `<div class="cat-group"><div class="cat-label">${cat}</div>`;
-      // Unchecked first
-      [...catItems].sort((a,b) => (a.checked?1:0)-(b.checked?1:0)).forEach(item => {
-        html += renderItem(item);
-      });
-      html += '</div>';
+      const sorted = [...catItems].sort((a,b) => (a.checked?1:0)-(b.checked?1:0));
+      html += `<div class="cat-group"><div class="cat-label">${cat}</div><table class="g-table"><tbody>${sorted.map(item=>renderItem(item)).join('')}</tbody></table></div>`;
     });
   }
 
@@ -711,13 +701,16 @@ function renderList() {
 
 function renderItem(item) {
   const storeLabel = STORE_LABELS[item.store] || 'Other';
-  const safeId = item.id.replace(/[^a-zA-Z0-9_-]/g,'_');
-  return `<div class="g-item${item.checked?' checked':''}" id="gi-${item.id}">
-    <div class="check-zone" onclick="toggleCheck('${item.id}')">
-      <div class="check-circle">${item.checked?'✓':''}</div>
-    </div>
-    <div class="item-left">
-      <span class="item-name">${item.name}</span>
+  return `<tr class="${item.checked?'checked':''}" id="gi-${item.id}">
+    <td class="col-check">
+      <div class="check-zone" onclick="toggleCheck('${item.id}')">
+        <div class="check-circle">${item.checked?'✓':''}</div>
+      </div>
+    </td>
+    <td class="col-name">
+      <div class="item-name">${item.name}</div>
+    </td>
+    <td class="col-qty">
       <input class="item-qty-input" type="text"
         value="${item.qty||''}"
         placeholder="qty"
@@ -725,9 +718,11 @@ function renderItem(item) {
         onclick="event.stopPropagation()"
         ${item.checked?'disabled':''}
       >
-    </div>
-    <button class="store-pill" data-store="${item.store}" onclick="cycleStore('${item.id}')">${storeLabel}</button>
-  </div>`;
+    </td>
+    <td class="col-store">
+      <button class="store-pill" data-store="${item.store}" onclick="cycleStore('${item.id}')">${storeLabel}</button>
+    </td>
+  </tr>`;
 }
 
 // ═══════════════════════════════════════════
@@ -741,13 +736,12 @@ function toggleCheck(id) {
   if (el) {
     el.classList.toggle("checked", item.checked);
     el.querySelector(".check-circle").textContent = item.checked ? "✓" : "";
-    const nameEl = el.querySelector(".item-name");
-    if (nameEl) nameEl.style.textDecoration = item.checked ? "line-through" : "";
     const qtyInput = el.querySelector(".item-qty-input");
     if (qtyInput) qtyInput.disabled = item.checked;
-    // Move to bottom of category when checked
-    if (item.checked) el.parentElement.appendChild(el);
-    else el.parentElement.prepend(el);
+    // Move to bottom of tbody when checked
+    const tbody = el.parentElement;
+    if (item.checked) tbody.appendChild(el);
+    else tbody.prepend(el);
   }
   updateCounts();
   updateProgress();
@@ -760,12 +754,8 @@ function cycleStore(id) {
   const idx = STORES.indexOf(item.store);
   item.store = STORES[(idx+1) % STORES.length];
   // Update store pill in place without full re-render
-  const el = document.getElementById('gi-' + id);
-  if (el) {
-    const pill = el.querySelector('.store-pill');
-    pill.dataset.store = item.store;
-    pill.textContent = STORE_LABELS[item.store] || 'Other';
-  }
+  const pill = document.querySelector(`#gi-${id} .store-pill`);
+  if (pill) { pill.dataset.store = item.store; pill.textContent = STORE_LABELS[item.store] || 'Other'; }
   updateCounts();
   saveLocal();
   saveAssignments();
