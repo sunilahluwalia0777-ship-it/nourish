@@ -736,7 +736,7 @@ header {
 }
 .day-hd {
   text-align: center;
-  padding: 10px 4px;
+  padding: 6px 4px;
 }
 .day-hd .dow {
   font-size: 14px;
@@ -745,23 +745,7 @@ header {
   text-transform: uppercase;
   color: var(--text3);
 }
-.day-hd .dn {
-  font-family: var(--serif);
-  font-size: 32px;
-  color: var(--text);
-  margin-top: 3px;
-  line-height: 1;
-}
 .day-hd.today .dow { color: var(--gold); }
-.day-hd.today .dn {
-  color: var(--gold);
-  background: var(--gold-pale);
-  width: 44px; height: 44px;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 50%;
-  margin: 4px auto 0;
-  font-size: 24px;
-}
 
 /* Meal rows */
 .meal-row {
@@ -2589,9 +2573,8 @@ function buildCalendar() {
   // Day headers
   let html = '<div class="cal-day-headers"><div></div>';
   DAYS.forEach((d,i) => {
-    const date = new Date(window._mondayDate); date.setDate(date.getDate()+i);
     const isToday = i === window._todayIdx;
-    html += `<div class="day-hd${isToday?' today':''}"><div class="dow">${d}</div><div class="dn">${date.getDate()}</div></div>`;
+    html += `<div class="day-hd${isToday?' today':''}"><div class="dow">${d}</div></div>`;
   });
   html += '</div>';
 
@@ -2740,6 +2723,7 @@ function setMeal(dayIdx, mealType, meal) {
   wrap.classList.toggle('active', false);
 
   updateDayTotals(dayIdx);
+  savePlanToStorage();
 }
 
 function clearMeal(e, dayIdx, mealType) {
@@ -2751,11 +2735,13 @@ function clearMeal(e, dayIdx, mealType) {
   front.innerHTML = `<div class="card-empty-hint"><span class="plus">+</span>Add ${mealType}</div>`;
   front.onclick = (e) => { if (!e.target.closest('button')) handleCardClick(e, dayIdx, mealType); };
   updateDayTotals(dayIdx);
+  savePlanToStorage();
 }
 
 function clearAll() {
   if (!confirm('Clear the entire week?')) return;
   DAYS.forEach((_,di) => MEAL_TYPES.forEach(t => { if (plan[di][t]) clearMeal({stopPropagation:()=>{}}, di, t); }));
+  localStorage.removeItem('nourish_plan');
 }
 
 function updateDayTotals(dayIdx) {
@@ -2773,6 +2759,56 @@ function updateDayTotals(dayIdx) {
 // ══════════════════════════════════════════════════════
 // DEFAULT PLAN
 // ══════════════════════════════════════════════════════
+// ── Plan persistence ───────────────────────────────────────────────────────
+function savePlanToStorage() {
+  try {
+    const snapshot = {};
+    DAYS.forEach((_, di) => {
+      snapshot[di] = {};
+      MEAL_TYPES.forEach(t => {
+        const m = plan[di][t];
+        if (!m) return;
+        // Store the meal id + type so we can look it up on restore
+        // For special meals (none/eatout) store the whole tiny object
+        if (m.id === '__none__' || m.id === '__eatout__') {
+          snapshot[di][t] = { id: m.id, special: true };
+        } else {
+          snapshot[di][t] = { id: m.id, type: t };
+        }
+      });
+    });
+    localStorage.setItem('nourish_plan', JSON.stringify(snapshot));
+  } catch(e) {}
+}
+
+function loadPlanFromStorage() {
+  try {
+    const saved = localStorage.getItem('nourish_plan');
+    if (!saved) return false;
+    const snapshot = JSON.parse(saved);
+    let loaded = 0;
+    Object.entries(snapshot).forEach(([di, meals]) => {
+      Object.entries(meals).forEach(([t, entry]) => {
+        if (entry.special) {
+          // Restore skip/eatout
+          setMeal(parseInt(di), t, {
+            id: entry.id,
+            name: entry.id === '__none__' ? 'Skip' : 'Eating out',
+            cal: 0,
+            nutrition: { protein:0, carbs:0, fat:0 }
+          });
+          loaded++;
+        } else {
+          // Find meal in database by id
+          const meal = Object.values(MEALS).flat().find(m => m.id === entry.id);
+          if (meal) { setMeal(parseInt(di), t, meal); loaded++; }
+        }
+      });
+    });
+    return loaded > 0;
+  } catch(e) { return false; }
+}
+
 function defaultPlan() {
   const defaults = [
     {d:0,breakfast:'b1',lunch:'l1',snack:'s6',dinner:'d1'},
@@ -2788,7 +2824,11 @@ function defaultPlan() {
     if (m) setMeal(row.d, t, m);
   }));
 }
-defaultPlan();
+
+// Load saved plan, fall back to defaults if nothing saved
+if (!loadPlanFromStorage()) {
+  defaultPlan();
+}
 
 // ══════════════════════════════════════════════════════
 // CAROUSEL
