@@ -430,6 +430,171 @@ document.addEventListener('click', e => {
   }
 })();
 
+
+// ══════════════════════════════════════════════════════
+// PANTRY CHECK
+// ══════════════════════════════════════════════════════
+
+// Staples we assume users always have — never show in pantry check
+const STAPLES = [
+  'salt','pepper','water','oil','olive oil','avocado oil','sesame oil',
+  'baking powder','baking soda','vanilla extract','cinnamon','stevia',
+  'agave','honey','soy sauce','fish sauce',
+];
+
+// pantryState: { 'ingredient name lowercase' : 'have' | 'need' }
+let pantryState = {};
+
+function loadPantryState() {
+  try { pantryState = JSON.parse(localStorage.getItem('pantry_state') || '{}'); } catch(e) { pantryState = {}; }
+}
+function savePantryState() {
+  localStorage.setItem('pantry_state', JSON.stringify(pantryState));
+}
+loadPantryState();
+
+function isStaple(name) {
+  const lower = name.toLowerCase();
+  return STAPLES.some(s => lower.includes(s));
+}
+
+// Extract all unique ingredients from the current week's plan
+function extractWeekIngredients() {
+  const seen = new Map(); // name → { qty, category }
+  const CAT_ORDER = ['Proteins','Produce','Dairy & Eggs','Grains & Pantry','Condiments & Spices','Frozen & Other'];
+
+  DAYS.forEach((_, di) => {
+    MEAL_TYPES.forEach(t => {
+      const m = plan[di][t];
+      if (!m || m.id === '__none__' || m.id === '__eatout__') return;
+      (m.ingredients || []).forEach(raw => {
+        if (!raw || raw.startsWith('(')) return;
+        // Parse name and qty
+        const parenMatch = raw.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+        let name, qty;
+        if (parenMatch) {
+          name = parenMatch[1].trim(); qty = parenMatch[2].trim();
+        } else {
+          const qtyMatch = raw.match(/^([\d½¼¾⅓⅔]+(?:\/\d+)?(?:\.\d+)?\s*(?:cup|tbsp|tsp|oz|g|kg|lb|lbs|clove|tsp|bunch|can|piece|sprig|pinch|package)?s?)\s+(.+)/i);
+          if (qtyMatch) { qty = qtyMatch[1].trim(); name = qtyMatch[2].trim(); }
+          else { name = raw.trim(); qty = ''; }
+        }
+        // Clean up name
+        name = name.replace(/,.*$/, '').replace(/\(.*?\)/g, '').trim();
+        if (!name || name.length < 2 || isStaple(name)) return;
+        const key = name.toLowerCase();
+        if (!seen.has(key)) seen.set(key, { name, qty, category: categorizePantryItem(name) });
+      });
+    });
+  });
+
+  // Group by category
+  const groups = {};
+  seen.forEach(({ name, qty, category }) => {
+    if (!groups[category]) groups[category] = [];
+    groups[category].push({ name, qty, key: name.toLowerCase() });
+  });
+
+  // Return sorted by category order
+  const result = [];
+  CAT_ORDER.forEach(cat => {
+    if (groups[cat]) result.push({ cat, items: groups[cat].sort((a,b) => a.name.localeCompare(b.name)) });
+  });
+  Object.keys(groups).forEach(cat => {
+    if (!CAT_ORDER.includes(cat)) result.push({ cat, items: groups[cat] });
+  });
+  return result;
+}
+
+function categorizePantryItem(name) {
+  const n = name.toLowerCase();
+  if (/chicken|salmon|shrimp|turkey|lamb|beef|tuna|cod|fish|egg/.test(n)) return 'Proteins';
+  if (/apple|banana|berry|blueberr|mango|lemon|lime|spinach|broccoli|asparagus|zucchini|carrot|celery|cucumber|tomato|onion|garlic|ginger|pepper|jalap|lettuce|radish|cauliflower|potato|avocado|cilantro|coriander leaf|green onion|mushroom|cabbage|herb|saag|bhindi|okra/.test(n)) return 'Produce';
+  if (/milk|cream|yogurt|chobani|cheese|butter|cottage|paneer|ghee/.test(n)) return 'Dairy & Eggs';
+  if (/rice|quinoa|oat|pasta|bread|tortilla|noodle|flour|lentil|dal|daal|rajma|bean|chickpea|granola|roti|paratha|makki|atta/.test(n)) return 'Grains & Pantry';
+  if (/masala|cumin|coriander|turmeric|chilli|chili|cardamom|mustard|pesto|salsa|hummus|tzatziki|buffalo|mayo|dressing|vinegar|sauce/.test(n)) return 'Condiments & Spices';
+  return 'Frozen & Other';
+}
+
+function openPantryCheck() {
+  const groups = extractWeekIngredients();
+  if (!groups.length) {
+    // No ingredients — skip pantry check
+    generateGroceryList([]);
+    return;
+  }
+
+  // Build modal content
+  let total = 0;
+  let html = `<div class="pantry-select-row">
+    <button class="pantry-select-all" onclick="setAllPantry('have')">✓ I have everything</button>
+    <button class="pantry-have-none" onclick="setAllPantry('need')">✗ Need everything</button>
+  </div>`;
+
+  groups.forEach(({ cat, items }) => {
+    html += `<div class="pantry-cat-label">${cat}</div>`;
+    items.forEach(({ name, qty, key }) => {
+      total++;
+      const state = pantryState[key] || 'need';
+      html += `<div class="pantry-item" id="pi-${key.replace(/[^a-z0-9]/g,'_')}">
+        <div>
+          <div class="pantry-item-name">${name}</div>
+          ${qty ? `<div class="pantry-item-qty">${qty}</div>` : ''}
+        </div>
+        <div class="pantry-toggle">
+          <button class="pantry-btn have${state==='have'?' active':''}"
+            onclick="setPantryItem('${key.replace(/'/g,"\'")}','have',this)">✓ Have it</button>
+          <button class="pantry-btn need${state==='need'?' active':''}"
+            onclick="setPantryItem('${key.replace(/'/g,"\'")}','need',this)">Need it</button>
+        </div>
+      </div>`;
+    });
+  });
+
+  document.getElementById('pantry-body').innerHTML = html;
+  updatePantryProgress(total);
+  document.getElementById('pantry-overlay').classList.add('open');
+}
+
+function setPantryItem(key, state, btn) {
+  pantryState[key] = state;
+  savePantryState();
+  const row = btn.closest('.pantry-toggle');
+  row.querySelectorAll('.pantry-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  updatePantryProgress();
+}
+
+function setAllPantry(state) {
+  document.querySelectorAll('.pantry-item').forEach(row => {
+    const name = row.querySelector('.pantry-item-name').textContent.toLowerCase();
+    pantryState[name] = state;
+    row.querySelectorAll('.pantry-btn').forEach(b => b.classList.remove('active'));
+    const target = row.querySelector(`.pantry-btn.${state}`);
+    if (target) target.classList.add('active');
+  });
+  savePantryState();
+  updatePantryProgress();
+}
+
+function updatePantryProgress(total) {
+  const items = document.querySelectorAll('.pantry-item');
+  const t = total || items.length;
+  const have = document.querySelectorAll('.pantry-btn.have.active').length;
+  const pct = t > 0 ? Math.round(have / t * 100) : 0;
+  document.getElementById('pantry-progress-fill').style.width = pct + '%';
+  document.getElementById('pantry-progress-label').textContent = `${have} of ${t} already have`;
+}
+
+function confirmPantryAndGenerate() {
+  // Collect items marked as "have"
+  const haveItems = Object.entries(pantryState)
+    .filter(([, v]) => v === 'have')
+    .map(([k]) => k);
+  document.getElementById('pantry-overlay').classList.remove('open');
+  generateGroceryList(haveItems);
+}
+
 </script>
 <style>
 /* ─── Design tokens ───────────────────────────────────── */
@@ -1152,6 +1317,205 @@ header {
 .gh-link { font-size: 11px; color: var(--text3); text-decoration: none; }
 .gh-link:hover { color: var(--gold); }
 
+
+/* ─── Pantry Check Modal ────────────────────────────────────────────────── */
+.pantry-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(28,26,22,.82);
+  z-index: 250;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+}
+.pantry-overlay.open { display: flex; }
+
+.pantry-modal {
+  background: var(--card-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  width: min(620px, 92vw);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 32px 80px rgba(0,0,0,.5);
+}
+
+.pantry-header {
+  padding: 22px 26px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.pantry-header h2 {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.pantry-header p {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.5;
+}
+.pantry-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+.pantry-progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-right: 12px;
+}
+.pantry-progress-fill {
+  height: 100%;
+  background: var(--green-light);
+  border-radius: 2px;
+  transition: width .3s ease;
+}
+.pantry-progress-label {
+  font-size: 12px;
+  color: var(--text2);
+  white-space: nowrap;
+}
+
+.pantry-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 26px;
+}
+
+.pantry-cat-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin: 14px 0 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--border);
+}
+.pantry-cat-label:first-child { margin-top: 0; }
+
+.pantry-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.pantry-item:last-child { border: none; }
+.pantry-item-name {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 500;
+  flex: 1;
+}
+.pantry-item-qty {
+  font-size: 12px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+
+.pantry-toggle {
+  display: flex;
+  gap: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border2);
+  flex-shrink: 0;
+}
+.pantry-btn {
+  padding: 7px 14px;
+  border: none;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+  background: var(--surface2);
+  color: var(--text3);
+}
+.pantry-btn.have {
+  border-right: 1px solid var(--border2);
+}
+.pantry-btn.have.active {
+  background: var(--green-pale);
+  color: var(--green-light);
+}
+.pantry-btn.need.active {
+  background: var(--rose-pale);
+  color: var(--rose-light);
+}
+
+.pantry-footer {
+  padding: 16px 26px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.pantry-footer-note {
+  font-size: 12px;
+  color: var(--text3);
+  flex: 1;
+  line-height: 1.5;
+}
+.pantry-action-btns { display: flex; gap: 10px; }
+.pantry-skip-btn {
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  font-family: var(--sans);
+  font-size: 13px;
+  padding: 10px 18px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.pantry-skip-btn:hover { border-color: var(--gold); color: var(--gold); }
+.pantry-generate-btn {
+  background: var(--gold);
+  border: none;
+  color: #1C1A16;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 10px 22px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.pantry-generate-btn:hover { background: var(--gold-light); }
+
+.pantry-select-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.pantry-select-all, .pantry-have-none {
+  font-size: 11px;
+  color: var(--text3);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: all .15s;
+}
+.pantry-select-all:hover { color: var(--green-light); border-color: var(--green-light); }
+.pantry-have-none:hover { color: var(--rose-light); border-color: var(--rose-light); }
+
 /* ─── Big Card Flip Overlay ──────────────────────────────────────────────── */
 .bigcard-overlay {
   display: none;
@@ -1716,6 +2080,31 @@ a.src-link-back:hover { background: #303028; color: var(--gold-light); }
   <div id="gh-history-list" style="font-size:12px;color:var(--text3)">Connect to see history</div>
 </div>
 
+
+<!-- Pantry Check Modal -->
+<div class="pantry-overlay" id="pantry-overlay">
+  <div class="pantry-modal">
+    <div class="pantry-header">
+      <h2>🥦 Quick pantry check</h2>
+      <p>Mark what you already have — these will be excluded from your grocery list.</p>
+      <div class="pantry-progress-row">
+        <div class="pantry-progress-bar">
+          <div class="pantry-progress-fill" id="pantry-progress-fill" style="width:0%"></div>
+        </div>
+        <span class="pantry-progress-label" id="pantry-progress-label">0 of 0 checked</span>
+      </div>
+    </div>
+    <div class="pantry-body" id="pantry-body"></div>
+    <div class="pantry-footer">
+      <div class="pantry-footer-note">Items marked "Have it" won't appear on your grocery list</div>
+      <div class="pantry-action-btns">
+        <button class="pantry-skip-btn" onclick="generateGroceryList([])">Skip — include everything</button>
+        <button class="pantry-generate-btn" onclick="confirmPantryAndGenerate()">Generate list →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="bigcard-overlay" id="bigcard-overlay" onclick="handleBigCardOverlayClick(event)">
   <div class="bigcard-scene">
     <div class="bigcard-flipper" id="bigcard-flipper">
@@ -1840,6 +2229,151 @@ Slice chicken, assemble bowl, drizzle dressing." style="width:100%;background:va
 <script>
 // Keys are entered once via the API strip in the app and saved to localStorage.
 // They persist across sessions in this browser automatically.
+
+
+
+function isStaple(name) {
+  const lower = name.toLowerCase();
+  return STAPLES.some(s => lower.includes(s));
+}
+
+// Extract all unique ingredients from the current week's plan
+function extractWeekIngredients() {
+  const seen = new Map(); // name → { qty, category }
+  const CAT_ORDER = ['Proteins','Produce','Dairy & Eggs','Grains & Pantry','Condiments & Spices','Frozen & Other'];
+
+  DAYS.forEach((_, di) => {
+    MEAL_TYPES.forEach(t => {
+      const m = plan[di][t];
+      if (!m || m.id === '__none__' || m.id === '__eatout__') return;
+      (m.ingredients || []).forEach(raw => {
+        if (!raw || raw.startsWith('(')) return;
+        // Parse name and qty
+        const parenMatch = raw.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+        let name, qty;
+        if (parenMatch) {
+          name = parenMatch[1].trim(); qty = parenMatch[2].trim();
+        } else {
+          const qtyMatch = raw.match(/^([\d½¼¾⅓⅔]+(?:\/\d+)?(?:\.\d+)?\s*(?:cup|tbsp|tsp|oz|g|kg|lb|lbs|clove|tsp|bunch|can|piece|sprig|pinch|package)?s?)\s+(.+)/i);
+          if (qtyMatch) { qty = qtyMatch[1].trim(); name = qtyMatch[2].trim(); }
+          else { name = raw.trim(); qty = ''; }
+        }
+        // Clean up name
+        name = name.replace(/,.*$/, '').replace(/\(.*?\)/g, '').trim();
+        if (!name || name.length < 2 || isStaple(name)) return;
+        const key = name.toLowerCase();
+        if (!seen.has(key)) seen.set(key, { name, qty, category: categorizePantryItem(name) });
+      });
+    });
+  });
+
+  // Group by category
+  const groups = {};
+  seen.forEach(({ name, qty, category }) => {
+    if (!groups[category]) groups[category] = [];
+    groups[category].push({ name, qty, key: name.toLowerCase() });
+  });
+
+  // Return sorted by category order
+  const result = [];
+  CAT_ORDER.forEach(cat => {
+    if (groups[cat]) result.push({ cat, items: groups[cat].sort((a,b) => a.name.localeCompare(b.name)) });
+  });
+  Object.keys(groups).forEach(cat => {
+    if (!CAT_ORDER.includes(cat)) result.push({ cat, items: groups[cat] });
+  });
+  return result;
+}
+
+function categorizePantryItem(name) {
+  const n = name.toLowerCase();
+  if (/chicken|salmon|shrimp|turkey|lamb|beef|tuna|cod|fish|egg/.test(n)) return 'Proteins';
+  if (/apple|banana|berry|blueberr|mango|lemon|lime|spinach|broccoli|asparagus|zucchini|carrot|celery|cucumber|tomato|onion|garlic|ginger|pepper|jalap|lettuce|radish|cauliflower|potato|avocado|cilantro|coriander leaf|green onion|mushroom|cabbage|herb|saag|bhindi|okra/.test(n)) return 'Produce';
+  if (/milk|cream|yogurt|chobani|cheese|butter|cottage|paneer|ghee/.test(n)) return 'Dairy & Eggs';
+  if (/rice|quinoa|oat|pasta|bread|tortilla|noodle|flour|lentil|dal|daal|rajma|bean|chickpea|granola|roti|paratha|makki|atta/.test(n)) return 'Grains & Pantry';
+  if (/masala|cumin|coriander|turmeric|chilli|chili|cardamom|mustard|pesto|salsa|hummus|tzatziki|buffalo|mayo|dressing|vinegar|sauce/.test(n)) return 'Condiments & Spices';
+  return 'Frozen & Other';
+}
+
+function openPantryCheck() {
+  const groups = extractWeekIngredients();
+  if (!groups.length) {
+    // No ingredients — skip pantry check
+    generateGroceryList([]);
+    return;
+  }
+
+  // Build modal content
+  let total = 0;
+  let html = `<div class="pantry-select-row">
+    <button class="pantry-select-all" onclick="setAllPantry('have')">✓ I have everything</button>
+    <button class="pantry-have-none" onclick="setAllPantry('need')">✗ Need everything</button>
+  </div>`;
+
+  groups.forEach(({ cat, items }) => {
+    html += `<div class="pantry-cat-label">${cat}</div>`;
+    items.forEach(({ name, qty, key }) => {
+      total++;
+      const state = pantryState[key] || 'need';
+      html += `<div class="pantry-item" id="pi-${key.replace(/[^a-z0-9]/g,'_')}">
+        <div>
+          <div class="pantry-item-name">${name}</div>
+          ${qty ? `<div class="pantry-item-qty">${qty}</div>` : ''}
+        </div>
+        <div class="pantry-toggle">
+          <button class="pantry-btn have${state==='have'?' active':''}"
+            onclick="setPantryItem('${key.replace(/'/g,"\'")}','have',this)">✓ Have it</button>
+          <button class="pantry-btn need${state==='need'?' active':''}"
+            onclick="setPantryItem('${key.replace(/'/g,"\'")}','need',this)">Need it</button>
+        </div>
+      </div>`;
+    });
+  });
+
+  document.getElementById('pantry-body').innerHTML = html;
+  updatePantryProgress(total);
+  document.getElementById('pantry-overlay').classList.add('open');
+}
+
+function setPantryItem(key, state, btn) {
+  pantryState[key] = state;
+  savePantryState();
+  const row = btn.closest('.pantry-toggle');
+  row.querySelectorAll('.pantry-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  updatePantryProgress();
+}
+
+function setAllPantry(state) {
+  document.querySelectorAll('.pantry-item').forEach(row => {
+    const name = row.querySelector('.pantry-item-name').textContent.toLowerCase();
+    pantryState[name] = state;
+    row.querySelectorAll('.pantry-btn').forEach(b => b.classList.remove('active'));
+    const target = row.querySelector(`.pantry-btn.${state}`);
+    if (target) target.classList.add('active');
+  });
+  savePantryState();
+  updatePantryProgress();
+}
+
+function updatePantryProgress(total) {
+  const items = document.querySelectorAll('.pantry-item');
+  const t = total || items.length;
+  const have = document.querySelectorAll('.pantry-btn.have.active').length;
+  const pct = t > 0 ? Math.round(have / t * 100) : 0;
+  document.getElementById('pantry-progress-fill').style.width = pct + '%';
+  document.getElementById('pantry-progress-label').textContent = `${have} of ${t} already have`;
+}
+
+function confirmPantryAndGenerate() {
+  // Collect items marked as "have"
+  const haveItems = Object.entries(pantryState)
+    .filter(([, v]) => v === 'have')
+    .map(([k]) => k);
+  document.getElementById('pantry-overlay').classList.remove('open');
+  generateGroceryList(haveItems);
+}
+
 </script>
 
 <script>
@@ -2409,18 +2943,37 @@ document.addEventListener('click', e => {
 // ══════════════════════════════════════════════════════
 // GROCERY LIST
 // ══════════════════════════════════════════════════════
-async function planningComplete() {
+// Step 1: validate then open pantry check
+function planningComplete() {
   const key = getKey();
   if (!key || !key.startsWith('sk-')) { alert('Please enter your Anthropic API key first.'); return; }
+  const hasMeals = DAYS.some((_,di) => MEAL_TYPES.some(t => {
+    const m = plan[di][t];
+    return m && m.id !== '__none__' && m.id !== '__eatout__';
+  }));
+  if (!hasMeals) { alert('Add some meals first.'); return; }
+  // Open pantry check before generating
+  openPantryCheck();
+}
+
+// Step 2: generate grocery list with pantry exclusions
+async function generateGroceryList(haveItems) {
+  const key = getKey();
   const summary = [];
   DAYS.forEach((day,di) => MEAL_TYPES.forEach(t => {
     const m = plan[di][t];
     if (m && m.id !== '__none__' && m.id !== '__eatout__') summary.push({day,t,name:m.name,ingredients:m.ingredients||[]});
   }));
-  if (!summary.length) { alert('Add some meals first.'); return; }
+
   document.getElementById('gen-overlay').classList.add('active');
+
   const mealsText = summary.map(m=>`${m.day} ${m.t}: ${m.name}\n  ${m.ingredients.join(', ')}`).join('\n');
-  const prompt = `Generate a consolidated grocery list from this weekly meal plan. Assume 2 servings per meal.\n\nMEAL PLAN:\n${mealsText}\n\nRules: combine duplicates, group into: Produce, Proteins, Dairy & Eggs, Grains & Pantry, Condiments & Spices, Frozen & Other. Format: "Item (quantity)". Skip salt/water basics.\n\nReturn ONLY valid JSON: {"Produce":[...],"Proteins":[...],"Dairy & Eggs":[...],"Grains & Pantry":[...],"Condiments & Spices":[...],"Frozen & Other":[...]}`;
+  const pantryNote = haveItems.length
+    ? `\n\nPANTRY — user already has these, DO NOT include in the grocery list:\n${haveItems.map(i=>'- '+i).join('\n')}`
+    : '';
+
+  const prompt = `Generate a consolidated grocery list from this weekly meal plan. Assume 2 servings per meal.\n\nMEAL PLAN:\n${mealsText}${pantryNote}\n\nRules: combine duplicates, group into: Produce, Proteins, Dairy & Eggs, Grains & Pantry, Condiments & Spices, Frozen & Other. Format: "Item (quantity)". Skip salt/water basics. Skip anything the user already has in their pantry.\n\nReturn ONLY valid JSON: {"Produce":[...],"Proteins":[...],"Dairy & Eggs":[...],"Grains & Pantry":[...],"Condiments & Spices":[...],"Frozen & Other":[...]}`;
+
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,messages:[{role:'user',content:prompt}]})});
     const data = await resp.json();
@@ -2429,7 +2982,6 @@ async function planningComplete() {
     const groceries = JSON.parse(raw);
     window._lastGroceries = groceries;
     renderGroceries(groceries);
-    // Auto-save to GitHub after grocery list generated
     saveToGithub();
   } catch(e) { alert(`Error: ${e.message}`); }
   finally { document.getElementById('gen-overlay').classList.remove('active'); }
@@ -3329,6 +3881,151 @@ async function loadSharedConfig() {
   } catch(e) { console.log('Config load skipped:', e.message); }
 }
 loadSharedConfig();
+
+
+
+
+function isStaple(name) {
+  const lower = name.toLowerCase();
+  return STAPLES.some(s => lower.includes(s));
+}
+
+// Extract all unique ingredients from the current week's plan
+function extractWeekIngredients() {
+  const seen = new Map(); // name → { qty, category }
+  const CAT_ORDER = ['Proteins','Produce','Dairy & Eggs','Grains & Pantry','Condiments & Spices','Frozen & Other'];
+
+  DAYS.forEach((_, di) => {
+    MEAL_TYPES.forEach(t => {
+      const m = plan[di][t];
+      if (!m || m.id === '__none__' || m.id === '__eatout__') return;
+      (m.ingredients || []).forEach(raw => {
+        if (!raw || raw.startsWith('(')) return;
+        // Parse name and qty
+        const parenMatch = raw.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+        let name, qty;
+        if (parenMatch) {
+          name = parenMatch[1].trim(); qty = parenMatch[2].trim();
+        } else {
+          const qtyMatch = raw.match(/^([\d½¼¾⅓⅔]+(?:\/\d+)?(?:\.\d+)?\s*(?:cup|tbsp|tsp|oz|g|kg|lb|lbs|clove|tsp|bunch|can|piece|sprig|pinch|package)?s?)\s+(.+)/i);
+          if (qtyMatch) { qty = qtyMatch[1].trim(); name = qtyMatch[2].trim(); }
+          else { name = raw.trim(); qty = ''; }
+        }
+        // Clean up name
+        name = name.replace(/,.*$/, '').replace(/\(.*?\)/g, '').trim();
+        if (!name || name.length < 2 || isStaple(name)) return;
+        const key = name.toLowerCase();
+        if (!seen.has(key)) seen.set(key, { name, qty, category: categorizePantryItem(name) });
+      });
+    });
+  });
+
+  // Group by category
+  const groups = {};
+  seen.forEach(({ name, qty, category }) => {
+    if (!groups[category]) groups[category] = [];
+    groups[category].push({ name, qty, key: name.toLowerCase() });
+  });
+
+  // Return sorted by category order
+  const result = [];
+  CAT_ORDER.forEach(cat => {
+    if (groups[cat]) result.push({ cat, items: groups[cat].sort((a,b) => a.name.localeCompare(b.name)) });
+  });
+  Object.keys(groups).forEach(cat => {
+    if (!CAT_ORDER.includes(cat)) result.push({ cat, items: groups[cat] });
+  });
+  return result;
+}
+
+function categorizePantryItem(name) {
+  const n = name.toLowerCase();
+  if (/chicken|salmon|shrimp|turkey|lamb|beef|tuna|cod|fish|egg/.test(n)) return 'Proteins';
+  if (/apple|banana|berry|blueberr|mango|lemon|lime|spinach|broccoli|asparagus|zucchini|carrot|celery|cucumber|tomato|onion|garlic|ginger|pepper|jalap|lettuce|radish|cauliflower|potato|avocado|cilantro|coriander leaf|green onion|mushroom|cabbage|herb|saag|bhindi|okra/.test(n)) return 'Produce';
+  if (/milk|cream|yogurt|chobani|cheese|butter|cottage|paneer|ghee/.test(n)) return 'Dairy & Eggs';
+  if (/rice|quinoa|oat|pasta|bread|tortilla|noodle|flour|lentil|dal|daal|rajma|bean|chickpea|granola|roti|paratha|makki|atta/.test(n)) return 'Grains & Pantry';
+  if (/masala|cumin|coriander|turmeric|chilli|chili|cardamom|mustard|pesto|salsa|hummus|tzatziki|buffalo|mayo|dressing|vinegar|sauce/.test(n)) return 'Condiments & Spices';
+  return 'Frozen & Other';
+}
+
+function openPantryCheck() {
+  const groups = extractWeekIngredients();
+  if (!groups.length) {
+    // No ingredients — skip pantry check
+    generateGroceryList([]);
+    return;
+  }
+
+  // Build modal content
+  let total = 0;
+  let html = `<div class="pantry-select-row">
+    <button class="pantry-select-all" onclick="setAllPantry('have')">✓ I have everything</button>
+    <button class="pantry-have-none" onclick="setAllPantry('need')">✗ Need everything</button>
+  </div>`;
+
+  groups.forEach(({ cat, items }) => {
+    html += `<div class="pantry-cat-label">${cat}</div>`;
+    items.forEach(({ name, qty, key }) => {
+      total++;
+      const state = pantryState[key] || 'need';
+      html += `<div class="pantry-item" id="pi-${key.replace(/[^a-z0-9]/g,'_')}">
+        <div>
+          <div class="pantry-item-name">${name}</div>
+          ${qty ? `<div class="pantry-item-qty">${qty}</div>` : ''}
+        </div>
+        <div class="pantry-toggle">
+          <button class="pantry-btn have${state==='have'?' active':''}"
+            onclick="setPantryItem('${key.replace(/'/g,"\'")}','have',this)">✓ Have it</button>
+          <button class="pantry-btn need${state==='need'?' active':''}"
+            onclick="setPantryItem('${key.replace(/'/g,"\'")}','need',this)">Need it</button>
+        </div>
+      </div>`;
+    });
+  });
+
+  document.getElementById('pantry-body').innerHTML = html;
+  updatePantryProgress(total);
+  document.getElementById('pantry-overlay').classList.add('open');
+}
+
+function setPantryItem(key, state, btn) {
+  pantryState[key] = state;
+  savePantryState();
+  const row = btn.closest('.pantry-toggle');
+  row.querySelectorAll('.pantry-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  updatePantryProgress();
+}
+
+function setAllPantry(state) {
+  document.querySelectorAll('.pantry-item').forEach(row => {
+    const name = row.querySelector('.pantry-item-name').textContent.toLowerCase();
+    pantryState[name] = state;
+    row.querySelectorAll('.pantry-btn').forEach(b => b.classList.remove('active'));
+    const target = row.querySelector(`.pantry-btn.${state}`);
+    if (target) target.classList.add('active');
+  });
+  savePantryState();
+  updatePantryProgress();
+}
+
+function updatePantryProgress(total) {
+  const items = document.querySelectorAll('.pantry-item');
+  const t = total || items.length;
+  const have = document.querySelectorAll('.pantry-btn.have.active').length;
+  const pct = t > 0 ? Math.round(have / t * 100) : 0;
+  document.getElementById('pantry-progress-fill').style.width = pct + '%';
+  document.getElementById('pantry-progress-label').textContent = `${have} of ${t} already have`;
+}
+
+function confirmPantryAndGenerate() {
+  // Collect items marked as "have"
+  const haveItems = Object.entries(pantryState)
+    .filter(([, v]) => v === 'have')
+    .map(([k]) => k);
+  document.getElementById('pantry-overlay').classList.remove('open');
+  generateGroceryList(haveItems);
+}
 
 </script>
 </body>
