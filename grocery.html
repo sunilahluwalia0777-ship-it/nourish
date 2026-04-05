@@ -166,22 +166,23 @@ body {
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 12px 16px 120px;
+  padding: 8px 12px 120px;
+  background: var(--card);
 }
 
 /* Category group */
-.cat-group { margin-bottom: 14px; }
+.cat-group { margin-bottom: 14px; background: var(--card); border-radius: 10px; overflow: hidden; }
 .cat-label {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--text3);
-  padding: 0 4px 4px;
+  padding: 8px 12px 6px;
   margin-bottom: 0;
   display: flex;
   align-items: center;
-  border-bottom: 1.5px solid var(--border);
+  background: var(--bg);
 }
 
 /* ── Grocery item — compact list row ── */
@@ -189,10 +190,10 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 4px;
+  padding: 7px 12px 7px 8px;
   border-bottom: 1px solid var(--border);
   transition: opacity .2s;
-  min-height: 36px;
+  min-height: 38px;
 }
 .g-item:last-child { border-bottom: none; }
 .g-item.checked { opacity: .4; }
@@ -230,15 +231,16 @@ body {
   color: var(--text);
   line-height: 1.2;
   min-width: 0;
+  padding-right: 8px;
 }
 
 /* Editable quantity field */
 .item-qty-input {
-  width: 72px;
+  width: 90px;
   font-family: var(--sans);
   font-size: 12px;
   color: var(--text2);
-  background: var(--bg);
+  background: transparent;
   border: 1px solid transparent;
   border-radius: 6px;
   padding: 3px 6px;
