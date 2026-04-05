@@ -170,35 +170,37 @@ body {
 }
 
 /* Category group */
-.cat-group { margin-bottom: 8px; }
+.cat-group { margin-bottom: 14px; }
 .cat-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.8px;
+  letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--text3);
-  padding: 0 4px;
-  margin-bottom: 4px;
-}
-
-/* ── Grocery item card ── */
-.g-item {
-  background: var(--card);
-  border-radius: var(--radius);
-  margin-bottom: 6px;
+  padding: 0 4px 4px;
+  margin-bottom: 0;
   display: flex;
   align-items: center;
-  gap: 0;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,.06);
-  transition: opacity .2s;
+  border-bottom: 1.5px solid var(--border);
 }
-.g-item.checked { opacity: .45; }
-.g-item.checked .item-name { text-decoration: line-through; }
+
+/* ── Grocery item — compact list row ── */
+.g-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border);
+  transition: opacity .2s;
+  min-height: 36px;
+}
+.g-item:last-child { border-bottom: none; }
+.g-item.checked { opacity: .4; }
+.g-item.checked .item-name { text-decoration: line-through; color: var(--text3); }
 
 .check-zone {
-  width: 56px;
-  height: 64px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -206,13 +208,14 @@ body {
   cursor: pointer;
 }
 .check-circle {
-  width: 26px; height: 26px;
+  width: 18px; height: 18px;
   border-radius: 50%;
-  border: 2px solid var(--border);
+  border: 1.5px solid var(--text3);
   display: flex; align-items: center; justify-content: center;
   transition: all .2s;
-  font-size: 14px;
+  font-size: 10px;
   color: transparent;
+  flex-shrink: 0;
 }
 .g-item.checked .check-circle {
   background: var(--instacart);
@@ -220,29 +223,38 @@ body {
   color: #fff;
 }
 
-.item-body {
-  flex: 1;
-  padding: 12px 0;
-  min-width: 0;
-}
 .item-name {
-  font-size: 16px;
+  flex: 1;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text);
-  line-height: 1.3;
+  line-height: 1.2;
+  min-width: 0;
 }
-.item-qty {
-  font-size: 13px;
+
+/* Editable quantity field */
+.item-qty-input {
+  width: 72px;
+  font-family: var(--sans);
+  font-size: 12px;
   color: var(--text2);
-  margin-top: 2px;
+  background: var(--bg);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 3px 6px;
+  text-align: right;
+  transition: all .15s;
+  flex-shrink: 0;
 }
+.item-qty-input:hover { border-color: var(--border); }
+.item-qty-input:focus { border-color: var(--instacart); outline: none; background: var(--card); color: var(--text); }
+.item-qty-input::placeholder { color: var(--text3); font-style: italic; }
 
 /* Store pill — tap to cycle store */
 .store-pill {
-  margin-right: 12px;
-  padding: 5px 10px;
-  border-radius: 20px;
-  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
@@ -691,14 +703,19 @@ function renderList() {
 
 function renderItem(item) {
   const storeLabel = STORE_LABELS[item.store] || 'Other';
+  const safeId = item.id.replace(/[^a-zA-Z0-9_-]/g,'_');
   return `<div class="g-item${item.checked?' checked':''}" id="gi-${item.id}">
     <div class="check-zone" onclick="toggleCheck('${item.id}')">
       <div class="check-circle">${item.checked?'✓':''}</div>
     </div>
-    <div class="item-body">
-      <div class="item-name">${item.name}</div>
-      ${item.qty?`<div class="item-qty">${item.qty}</div>`:''}
-    </div>
+    <div class="item-name">${item.name}</div>
+    <input class="item-qty-input" type="text"
+      value="${item.qty||''}"
+      placeholder="qty"
+      onchange="updateQty('${item.id}', this.value)"
+      onclick="event.stopPropagation()"
+      ${item.checked?'disabled':''}
+    >
     <button class="store-pill" data-store="${item.store}" onclick="cycleStore('${item.id}')">${storeLabel}</button>
   </div>`;
 }
@@ -710,13 +727,15 @@ function toggleCheck(id) {
   const item = items.find(i => i.id === id);
   if (!item) return;
   item.checked = !item.checked;
-  // Update in place — no full re-render flicker
   const el = document.getElementById("gi-" + id);
   if (el) {
     el.classList.toggle("checked", item.checked);
     el.querySelector(".check-circle").textContent = item.checked ? "✓" : "";
-    el.querySelector(".item-name").style.textDecoration = item.checked ? "line-through" : "";
-    // Move to bottom of its category group
+    const nameEl = el.querySelector(".item-name");
+    if (nameEl) nameEl.style.textDecoration = item.checked ? "line-through" : "";
+    const qtyInput = el.querySelector(".item-qty-input");
+    if (qtyInput) qtyInput.disabled = item.checked;
+    // Move to bottom of category when checked
     if (item.checked) el.parentElement.appendChild(el);
     else el.parentElement.prepend(el);
   }
@@ -730,7 +749,22 @@ function cycleStore(id) {
   if (!item) return;
   const idx = STORES.indexOf(item.store);
   item.store = STORES[(idx+1) % STORES.length];
-  render();
+  // Update store pill in place without full re-render
+  const el = document.getElementById('gi-' + id);
+  if (el) {
+    const pill = el.querySelector('.store-pill');
+    pill.dataset.store = item.store;
+    pill.textContent = STORE_LABELS[item.store] || 'Other';
+  }
+  updateCounts();
+  saveLocal();
+  saveAssignments();
+}
+
+function updateQty(id, val) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  item.qty = val.trim();
   saveLocal();
 }
 
