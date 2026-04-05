@@ -431,169 +431,6 @@ document.addEventListener('click', e => {
 })();
 
 
-// ══════════════════════════════════════════════════════
-// PANTRY CHECK
-// ══════════════════════════════════════════════════════
-
-// Staples we assume users always have — never show in pantry check
-const STAPLES = [
-  'salt','pepper','water','oil','olive oil','avocado oil','sesame oil',
-  'baking powder','baking soda','vanilla extract','cinnamon','stevia',
-  'agave','honey','soy sauce','fish sauce',
-];
-
-// pantryState: { 'ingredient name lowercase' : 'have' | 'need' }
-let pantryState = {};
-
-function loadPantryState() {
-  try { pantryState = JSON.parse(localStorage.getItem('pantry_state') || '{}'); } catch(e) { pantryState = {}; }
-}
-function savePantryState() {
-  localStorage.setItem('pantry_state', JSON.stringify(pantryState));
-}
-loadPantryState();
-
-function isStaple(name) {
-  const lower = name.toLowerCase();
-  return STAPLES.some(s => lower.includes(s));
-}
-
-// Extract all unique ingredients from the current week's plan
-function extractWeekIngredients() {
-  const seen = new Map(); // name → { qty, category }
-  const CAT_ORDER = ['Proteins','Produce','Dairy & Eggs','Grains & Pantry','Condiments & Spices','Frozen & Other'];
-
-  DAYS.forEach((_, di) => {
-    MEAL_TYPES.forEach(t => {
-      const m = plan[di][t];
-      if (!m || m.id === '__none__' || m.id === '__eatout__') return;
-      (m.ingredients || []).forEach(raw => {
-        if (!raw || raw.startsWith('(')) return;
-        // Parse name and qty
-        const parenMatch = raw.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
-        let name, qty;
-        if (parenMatch) {
-          name = parenMatch[1].trim(); qty = parenMatch[2].trim();
-        } else {
-          const qtyMatch = raw.match(/^([\d½¼¾⅓⅔]+(?:\/\d+)?(?:\.\d+)?\s*(?:cup|tbsp|tsp|oz|g|kg|lb|lbs|clove|tsp|bunch|can|piece|sprig|pinch|package)?s?)\s+(.+)/i);
-          if (qtyMatch) { qty = qtyMatch[1].trim(); name = qtyMatch[2].trim(); }
-          else { name = raw.trim(); qty = ''; }
-        }
-        // Clean up name
-        name = name.replace(/,.*$/, '').replace(/\(.*?\)/g, '').trim();
-        if (!name || name.length < 2 || isStaple(name)) return;
-        const key = name.toLowerCase();
-        if (!seen.has(key)) seen.set(key, { name, qty, category: categorizePantryItem(name) });
-      });
-    });
-  });
-
-  // Group by category
-  const groups = {};
-  seen.forEach(({ name, qty, category }) => {
-    if (!groups[category]) groups[category] = [];
-    groups[category].push({ name, qty, key: name.toLowerCase() });
-  });
-
-  // Return sorted by category order
-  const result = [];
-  CAT_ORDER.forEach(cat => {
-    if (groups[cat]) result.push({ cat, items: groups[cat].sort((a,b) => a.name.localeCompare(b.name)) });
-  });
-  Object.keys(groups).forEach(cat => {
-    if (!CAT_ORDER.includes(cat)) result.push({ cat, items: groups[cat] });
-  });
-  return result;
-}
-
-function categorizePantryItem(name) {
-  const n = name.toLowerCase();
-  if (/chicken|salmon|shrimp|turkey|lamb|beef|tuna|cod|fish|egg/.test(n)) return 'Proteins';
-  if (/apple|banana|berry|blueberr|mango|lemon|lime|spinach|broccoli|asparagus|zucchini|carrot|celery|cucumber|tomato|onion|garlic|ginger|pepper|jalap|lettuce|radish|cauliflower|potato|avocado|cilantro|coriander leaf|green onion|mushroom|cabbage|herb|saag|bhindi|okra/.test(n)) return 'Produce';
-  if (/milk|cream|yogurt|chobani|cheese|butter|cottage|paneer|ghee/.test(n)) return 'Dairy & Eggs';
-  if (/rice|quinoa|oat|pasta|bread|tortilla|noodle|flour|lentil|dal|daal|rajma|bean|chickpea|granola|roti|paratha|makki|atta/.test(n)) return 'Grains & Pantry';
-  if (/masala|cumin|coriander|turmeric|chilli|chili|cardamom|mustard|pesto|salsa|hummus|tzatziki|buffalo|mayo|dressing|vinegar|sauce/.test(n)) return 'Condiments & Spices';
-  return 'Frozen & Other';
-}
-
-function openPantryCheck() {
-  const groups = extractWeekIngredients();
-  if (!groups.length) {
-    // No ingredients — skip pantry check
-    generateGroceryList([]);
-    return;
-  }
-
-  // Build modal content
-  let total = 0;
-  let html = `<div class="pantry-select-row">
-    <button class="pantry-select-all" onclick="setAllPantry('have')">✓ I have everything</button>
-    <button class="pantry-have-none" onclick="setAllPantry('need')">✗ Need everything</button>
-  </div>`;
-
-  groups.forEach(({ cat, items }) => {
-    html += `<div class="pantry-cat-label">${cat}</div>`;
-    items.forEach(({ name, qty, key }) => {
-      total++;
-      const state = pantryState[key] || 'need';
-      html += `<div class="pantry-item" id="pi-${key.replace(/[^a-z0-9]/g,'_')}">
-        <div>
-          <div class="pantry-item-name">${name}</div>
-          ${qty ? `<div class="pantry-item-qty">${qty}</div>` : ''}
-        </div>
-        <div class="pantry-toggle">
-          <button class="pantry-btn have${state==='have'?' active':''}"
-            onclick="setPantryItem('${key.replace(/'/g,"\'")}','have',this)">✓ Have it</button>
-          <button class="pantry-btn need${state==='need'?' active':''}"
-            onclick="setPantryItem('${key.replace(/'/g,"\'")}','need',this)">Need it</button>
-        </div>
-      </div>`;
-    });
-  });
-
-  document.getElementById('pantry-body').innerHTML = html;
-  updatePantryProgress(total);
-  document.getElementById('pantry-overlay').classList.add('open');
-}
-
-function setPantryItem(key, state, btn) {
-  pantryState[key] = state;
-  savePantryState();
-  const row = btn.closest('.pantry-toggle');
-  row.querySelectorAll('.pantry-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  updatePantryProgress();
-}
-
-function setAllPantry(state) {
-  document.querySelectorAll('.pantry-item').forEach(row => {
-    const name = row.querySelector('.pantry-item-name').textContent.toLowerCase();
-    pantryState[name] = state;
-    row.querySelectorAll('.pantry-btn').forEach(b => b.classList.remove('active'));
-    const target = row.querySelector(`.pantry-btn.${state}`);
-    if (target) target.classList.add('active');
-  });
-  savePantryState();
-  updatePantryProgress();
-}
-
-function updatePantryProgress(total) {
-  const items = document.querySelectorAll('.pantry-item');
-  const t = total || items.length;
-  const have = document.querySelectorAll('.pantry-btn.have.active').length;
-  const pct = t > 0 ? Math.round(have / t * 100) : 0;
-  document.getElementById('pantry-progress-fill').style.width = pct + '%';
-  document.getElementById('pantry-progress-label').textContent = `${have} of ${t} already have`;
-}
-
-function confirmPantryAndGenerate() {
-  // Collect items marked as "have"
-  const haveItems = Object.entries(pantryState)
-    .filter(([, v]) => v === 'have')
-    .map(([k]) => k);
-  document.getElementById('pantry-overlay').classList.remove('open');
-  generateGroceryList(haveItems);
-}
 
 </script>
 <style>
@@ -2210,155 +2047,7 @@ Slice chicken, assemble bowl, drizzle dressing." style="width:100%;background:va
 
 <div class="toast" id="toast"></div>
 
-<script>
-// Keys are entered once via the API strip in the app and saved to localStorage.
-// They persist across sessions in this browser automatically.
 
-
-
-function isStaple(name) {
-  const lower = name.toLowerCase();
-  return STAPLES.some(s => lower.includes(s));
-}
-
-// Extract all unique ingredients from the current week's plan
-function extractWeekIngredients() {
-  const seen = new Map(); // name → { qty, category }
-  const CAT_ORDER = ['Proteins','Produce','Dairy & Eggs','Grains & Pantry','Condiments & Spices','Frozen & Other'];
-
-  DAYS.forEach((_, di) => {
-    MEAL_TYPES.forEach(t => {
-      const m = plan[di][t];
-      if (!m || m.id === '__none__' || m.id === '__eatout__') return;
-      (m.ingredients || []).forEach(raw => {
-        if (!raw || raw.startsWith('(')) return;
-        // Parse name and qty
-        const parenMatch = raw.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
-        let name, qty;
-        if (parenMatch) {
-          name = parenMatch[1].trim(); qty = parenMatch[2].trim();
-        } else {
-          const qtyMatch = raw.match(/^([\d½¼¾⅓⅔]+(?:\/\d+)?(?:\.\d+)?\s*(?:cup|tbsp|tsp|oz|g|kg|lb|lbs|clove|tsp|bunch|can|piece|sprig|pinch|package)?s?)\s+(.+)/i);
-          if (qtyMatch) { qty = qtyMatch[1].trim(); name = qtyMatch[2].trim(); }
-          else { name = raw.trim(); qty = ''; }
-        }
-        // Clean up name
-        name = name.replace(/,.*$/, '').replace(/\(.*?\)/g, '').trim();
-        if (!name || name.length < 2 || isStaple(name)) return;
-        const key = name.toLowerCase();
-        if (!seen.has(key)) seen.set(key, { name, qty, category: categorizePantryItem(name) });
-      });
-    });
-  });
-
-  // Group by category
-  const groups = {};
-  seen.forEach(({ name, qty, category }) => {
-    if (!groups[category]) groups[category] = [];
-    groups[category].push({ name, qty, key: name.toLowerCase() });
-  });
-
-  // Return sorted by category order
-  const result = [];
-  CAT_ORDER.forEach(cat => {
-    if (groups[cat]) result.push({ cat, items: groups[cat].sort((a,b) => a.name.localeCompare(b.name)) });
-  });
-  Object.keys(groups).forEach(cat => {
-    if (!CAT_ORDER.includes(cat)) result.push({ cat, items: groups[cat] });
-  });
-  return result;
-}
-
-function categorizePantryItem(name) {
-  const n = name.toLowerCase();
-  if (/chicken|salmon|shrimp|turkey|lamb|beef|tuna|cod|fish|egg/.test(n)) return 'Proteins';
-  if (/apple|banana|berry|blueberr|mango|lemon|lime|spinach|broccoli|asparagus|zucchini|carrot|celery|cucumber|tomato|onion|garlic|ginger|pepper|jalap|lettuce|radish|cauliflower|potato|avocado|cilantro|coriander leaf|green onion|mushroom|cabbage|herb|saag|bhindi|okra/.test(n)) return 'Produce';
-  if (/milk|cream|yogurt|chobani|cheese|butter|cottage|paneer|ghee/.test(n)) return 'Dairy & Eggs';
-  if (/rice|quinoa|oat|pasta|bread|tortilla|noodle|flour|lentil|dal|daal|rajma|bean|chickpea|granola|roti|paratha|makki|atta/.test(n)) return 'Grains & Pantry';
-  if (/masala|cumin|coriander|turmeric|chilli|chili|cardamom|mustard|pesto|salsa|hummus|tzatziki|buffalo|mayo|dressing|vinegar|sauce/.test(n)) return 'Condiments & Spices';
-  return 'Frozen & Other';
-}
-
-function openPantryCheck() {
-  const groups = extractWeekIngredients();
-  if (!groups.length) {
-    // No ingredients — skip pantry check
-    generateGroceryList([]);
-    return;
-  }
-
-  // Build modal content
-  let total = 0;
-  let html = `<div class="pantry-select-row">
-    <button class="pantry-select-all" onclick="setAllPantry('have')">✓ I have everything</button>
-    <button class="pantry-have-none" onclick="setAllPantry('need')">✗ Need everything</button>
-  </div>`;
-
-  groups.forEach(({ cat, items }) => {
-    html += `<div class="pantry-cat-label">${cat}</div>`;
-    items.forEach(({ name, qty, key }) => {
-      total++;
-      const state = pantryState[key] || 'need';
-      html += `<div class="pantry-item" id="pi-${key.replace(/[^a-z0-9]/g,'_')}">
-        <div>
-          <div class="pantry-item-name">${name}</div>
-          ${qty ? `<div class="pantry-item-qty">${qty}</div>` : ''}
-        </div>
-        <div class="pantry-toggle">
-          <button class="pantry-btn have${state==='have'?' active':''}"
-            onclick="setPantryItem('${key.replace(/'/g,"\'")}','have',this)">✓ Have it</button>
-          <button class="pantry-btn need${state==='need'?' active':''}"
-            onclick="setPantryItem('${key.replace(/'/g,"\'")}','need',this)">Need it</button>
-        </div>
-      </div>`;
-    });
-  });
-
-  document.getElementById('pantry-body').innerHTML = html;
-  updatePantryProgress(total);
-  document.getElementById('pantry-overlay').classList.add('open');
-}
-
-function setPantryItem(key, state, btn) {
-  pantryState[key] = state;
-  savePantryState();
-  const row = btn.closest('.pantry-toggle');
-  row.querySelectorAll('.pantry-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  updatePantryProgress();
-}
-
-function setAllPantry(state) {
-  document.querySelectorAll('.pantry-item').forEach(row => {
-    const name = row.querySelector('.pantry-item-name').textContent.toLowerCase();
-    pantryState[name] = state;
-    row.querySelectorAll('.pantry-btn').forEach(b => b.classList.remove('active'));
-    const target = row.querySelector(`.pantry-btn.${state}`);
-    if (target) target.classList.add('active');
-  });
-  savePantryState();
-  updatePantryProgress();
-}
-
-function updatePantryProgress(total) {
-  const items = document.querySelectorAll('.pantry-item');
-  const t = total || items.length;
-  const have = document.querySelectorAll('.pantry-btn.have.active').length;
-  const pct = t > 0 ? Math.round(have / t * 100) : 0;
-  document.getElementById('pantry-progress-fill').style.width = pct + '%';
-  document.getElementById('pantry-progress-label').textContent = `${have} of ${t} already have`;
-}
-
-function confirmPantryAndGenerate() {
-  // Collect items marked as "have"
-  const haveItems = Object.entries(pantryState)
-    .filter(([, v]) => v === 'have')
-    .map(([k]) => k);
-  document.getElementById('pantry-overlay').classList.remove('open');
-  generateGroceryList(haveItems);
-}
-
-</script>
 
 <script>
 // ══════════════════════════════════════════════════════
@@ -2992,6 +2681,149 @@ document.addEventListener('click', e => {
 // ══════════════════════════════════════════════════════
 // GROCERY LIST
 // ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+// PANTRY CHECK
+// ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+// PANTRY CHECK
+// ══════════════════════════════════════════════════════
+
+// Staples we assume users always have — never show in pantry check
+const STAPLES = [
+  'salt','pepper','water','oil','olive oil','avocado oil','sesame oil',
+  'baking powder','baking soda','vanilla extract','cinnamon','stevia',
+  'agave','honey','soy sauce','fish sauce',
+];
+
+// pantryState: { 'ingredient name lowercase' : 'have' | 'need' }
+let pantryState = {};
+
+function loadPantryState() {
+  try { pantryState = JSON.parse(localStorage.getItem('pantry_state') || '{}'); } catch(e) { pantryState = {}; }
+}
+function savePantryState() {
+  localStorage.setItem('pantry_state', JSON.stringify(pantryState));
+}
+loadPantryState();
+
+function isStaple(name) {
+  const lower = name.toLowerCase();
+  return STAPLES.some(s => lower.includes(s));
+}
+
+// Extract all unique ingredients from the current week's plan
+
+function categorizePantryItem(name) {
+  const n = name.toLowerCase();
+  if (/chicken|salmon|shrimp|turkey|lamb|beef|tuna|cod|fish|egg/.test(n)) return 'Proteins';
+  if (/apple|banana|berry|blueberr|mango|lemon|lime|spinach|broccoli|asparagus|zucchini|carrot|celery|cucumber|tomato|onion|garlic|ginger|pepper|jalap|lettuce|radish|cauliflower|potato|avocado|cilantro|coriander leaf|green onion|mushroom|cabbage|herb|saag|bhindi|okra/.test(n)) return 'Produce';
+  if (/milk|cream|yogurt|chobani|cheese|butter|cottage|paneer|ghee/.test(n)) return 'Dairy & Eggs';
+  if (/rice|quinoa|oat|pasta|bread|tortilla|noodle|flour|lentil|dal|daal|rajma|bean|chickpea|granola|roti|paratha|makki|atta/.test(n)) return 'Grains & Pantry';
+  if (/masala|cumin|coriander|turmeric|chilli|chili|cardamom|mustard|pesto|salsa|hummus|tzatziki|buffalo|mayo|dressing|vinegar|sauce/.test(n)) return 'Condiments & Spices';
+  return 'Frozen & Other';
+}
+
+// Keys are entered once via the API strip in the app and saved to localStorage.
+// They persist across sessions in this browser automatically.
+
+
+
+function isStaple(name) {
+  const lower = name.toLowerCase();
+  return STAPLES.some(s => lower.includes(s));
+}
+
+// Extract all unique ingredients from the current week's plan
+
+function categorizePantryItem(name) {
+  const n = name.toLowerCase();
+  if (/chicken|salmon|shrimp|turkey|lamb|beef|tuna|cod|fish|egg/.test(n)) return 'Proteins';
+  if (/apple|banana|berry|blueberr|mango|lemon|lime|spinach|broccoli|asparagus|zucchini|carrot|celery|cucumber|tomato|onion|garlic|ginger|pepper|jalap|lettuce|radish|cauliflower|potato|avocado|cilantro|coriander leaf|green onion|mushroom|cabbage|herb|saag|bhindi|okra/.test(n)) return 'Produce';
+  if (/milk|cream|yogurt|chobani|cheese|butter|cottage|paneer|ghee/.test(n)) return 'Dairy & Eggs';
+  if (/rice|quinoa|oat|pasta|bread|tortilla|noodle|flour|lentil|dal|daal|rajma|bean|chickpea|granola|roti|paratha|makki|atta/.test(n)) return 'Grains & Pantry';
+  if (/masala|cumin|coriander|turmeric|chilli|chili|cardamom|mustard|pesto|salsa|hummus|tzatziki|buffalo|mayo|dressing|vinegar|sauce/.test(n)) return 'Condiments & Spices';
+  return 'Frozen & Other';
+}
+
+function openPantryCheck() {
+  const groups = extractWeekIngredients();
+  if (!groups.length) {
+    // No ingredients — skip pantry check
+    generateGroceryList([]);
+    return;
+  }
+
+  // Build modal content
+  let total = 0;
+  let html = `<div class="pantry-select-row">
+    <button class="pantry-select-all" onclick="setAllPantry('have')">✓ I have everything</button>
+    <button class="pantry-have-none" onclick="setAllPantry('need')">✗ Need everything</button>
+  </div>`;
+
+  groups.forEach(({ cat, items }) => {
+    html += `<div class="pantry-cat-label">${cat}</div>`;
+    items.forEach(({ name, qty, key }) => {
+      total++;
+      const state = pantryState[key] || 'need';
+      html += `<div class="pantry-item" id="pi-${key.replace(/[^a-z0-9]/g,'_')}">
+        <div>
+          <div class="pantry-item-name">${name}</div>
+          ${qty ? `<div class="pantry-item-qty">${qty}</div>` : ''}
+        </div>
+        <div class="pantry-toggle">
+          <button class="pantry-btn have${state==='have'?' active':''}"
+            onclick="setPantryItem('${key.replace(/'/g,"\'")}','have',this)">✓ Have it</button>
+          <button class="pantry-btn need${state==='need'?' active':''}"
+            onclick="setPantryItem('${key.replace(/'/g,"\'")}','need',this)">Need it</button>
+        </div>
+      </div>`;
+    });
+  });
+
+  document.getElementById('pantry-body').innerHTML = html;
+  updatePantryProgress(total);
+  document.getElementById('pantry-overlay').classList.add('open');
+}
+
+function setPantryItem(key, state, btn) {
+  pantryState[key] = state;
+  savePantryState();
+  const row = btn.closest('.pantry-toggle');
+  row.querySelectorAll('.pantry-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  updatePantryProgress();
+}
+
+function setAllPantry(state) {
+  document.querySelectorAll('.pantry-item').forEach(row => {
+    const name = row.querySelector('.pantry-item-name').textContent.toLowerCase();
+    pantryState[name] = state;
+    row.querySelectorAll('.pantry-btn').forEach(b => b.classList.remove('active'));
+    const target = row.querySelector(`.pantry-btn.${state}`);
+    if (target) target.classList.add('active');
+  });
+  savePantryState();
+  updatePantryProgress();
+}
+
+function updatePantryProgress(total) {
+  const items = document.querySelectorAll('.pantry-item');
+  const t = total || items.length;
+  const have = document.querySelectorAll('.pantry-btn.have.active').length;
+  const pct = t > 0 ? Math.round(have / t * 100) : 0;
+  document.getElementById('pantry-progress-fill').style.width = pct + '%';
+  document.getElementById('pantry-progress-label').textContent = `${have} of ${t} already have`;
+}
+
+function confirmPantryAndGenerate() {
+  // Collect items marked as "have"
+  const haveItems = Object.entries(pantryState)
+    .filter(([, v]) => v === 'have')
+    .map(([k]) => k);
+  document.getElementById('pantry-overlay').classList.remove('open');
+  generateGroceryList(haveItems);
+}
+
 // Step 1: validate then open pantry check
 function planningComplete() {
   const key = getKey();
@@ -3997,84 +3829,7 @@ function categorizePantryItem(name) {
   return 'Frozen & Other';
 }
 
-function openPantryCheck() {
-  const groups = extractWeekIngredients();
-  if (!groups.length) {
-    // No ingredients — skip pantry check
-    generateGroceryList([]);
-    return;
-  }
 
-  // Build modal content
-  let total = 0;
-  let html = `<div class="pantry-select-row">
-    <button class="pantry-select-all" onclick="setAllPantry('have')">✓ I have everything</button>
-    <button class="pantry-have-none" onclick="setAllPantry('need')">✗ Need everything</button>
-  </div>`;
-
-  groups.forEach(({ cat, items }) => {
-    html += `<div class="pantry-cat-label">${cat}</div>`;
-    items.forEach(({ name, qty, key }) => {
-      total++;
-      const state = pantryState[key] || 'need';
-      html += `<div class="pantry-item" id="pi-${key.replace(/[^a-z0-9]/g,'_')}">
-        <div>
-          <div class="pantry-item-name">${name}</div>
-          ${qty ? `<div class="pantry-item-qty">${qty}</div>` : ''}
-        </div>
-        <div class="pantry-toggle">
-          <button class="pantry-btn have${state==='have'?' active':''}"
-            onclick="setPantryItem('${key.replace(/'/g,"\'")}','have',this)">✓ Have it</button>
-          <button class="pantry-btn need${state==='need'?' active':''}"
-            onclick="setPantryItem('${key.replace(/'/g,"\'")}','need',this)">Need it</button>
-        </div>
-      </div>`;
-    });
-  });
-
-  document.getElementById('pantry-body').innerHTML = html;
-  updatePantryProgress(total);
-  document.getElementById('pantry-overlay').classList.add('open');
-}
-
-function setPantryItem(key, state, btn) {
-  pantryState[key] = state;
-  savePantryState();
-  const row = btn.closest('.pantry-toggle');
-  row.querySelectorAll('.pantry-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  updatePantryProgress();
-}
-
-function setAllPantry(state) {
-  document.querySelectorAll('.pantry-item').forEach(row => {
-    const name = row.querySelector('.pantry-item-name').textContent.toLowerCase();
-    pantryState[name] = state;
-    row.querySelectorAll('.pantry-btn').forEach(b => b.classList.remove('active'));
-    const target = row.querySelector(`.pantry-btn.${state}`);
-    if (target) target.classList.add('active');
-  });
-  savePantryState();
-  updatePantryProgress();
-}
-
-function updatePantryProgress(total) {
-  const items = document.querySelectorAll('.pantry-item');
-  const t = total || items.length;
-  const have = document.querySelectorAll('.pantry-btn.have.active').length;
-  const pct = t > 0 ? Math.round(have / t * 100) : 0;
-  document.getElementById('pantry-progress-fill').style.width = pct + '%';
-  document.getElementById('pantry-progress-label').textContent = `${have} of ${t} already have`;
-}
-
-function confirmPantryAndGenerate() {
-  // Collect items marked as "have"
-  const haveItems = Object.entries(pantryState)
-    .filter(([, v]) => v === 'have')
-    .map(([k]) => k);
-  document.getElementById('pantry-overlay').classList.remove('open');
-  generateGroceryList(haveItems);
-}
 
 </script>
 </body>
