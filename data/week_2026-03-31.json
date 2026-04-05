@@ -1,6 +1,6 @@
 {
   "weekOf": "2026-03-31",
-  "savedAt": "2026-04-02T02:32:50.127Z",
+  "savedAt": "2026-04-05T16:59:57.637Z",
   "days": {
     "Mon": {
       "breakfast": {
@@ -12,12 +12,12 @@
         "fat": 10
       },
       "lunch": {
-        "id": "l1",
-        "name": "Broccoli Chicken Bowl",
-        "cal": 548,
-        "protein": 50,
-        "carbs": 74,
-        "fat": 7
+        "id": "l2",
+        "name": "Healthy Salad",
+        "cal": 108,
+        "protein": 2,
+        "carbs": 6,
+        "fat": 9
       },
       "snack": {
         "id": "s6",
@@ -28,30 +28,30 @@
         "fat": 4
       },
       "dinner": {
-        "id": "d1",
-        "name": "Honey Garlic Chicken + Quinoa",
-        "cal": 580,
-        "protein": 32,
-        "carbs": 60,
-        "fat": 18
+        "id": "d15",
+        "name": "Turkey Chili + Salad",
+        "cal": 500,
+        "protein": 35,
+        "carbs": 40,
+        "fat": 20
       }
     },
     "Tue": {
       "breakfast": {
-        "id": "b5",
-        "name": "Chobani Bowl",
-        "cal": 390,
-        "protein": 25,
-        "carbs": 33,
-        "fat": 19
+        "id": "b1",
+        "name": "Soaked Oats",
+        "cal": 380,
+        "protein": 12,
+        "carbs": 52,
+        "fat": 10
       },
       "lunch": {
-        "id": "l7",
-        "name": "Chipotle-style Bowl",
-        "cal": 550,
-        "protein": 36,
-        "carbs": 50,
-        "fat": 18
+        "id": "l2",
+        "name": "Healthy Salad",
+        "cal": 108,
+        "protein": 2,
+        "carbs": 6,
+        "fat": 9
       },
       "snack": {
         "id": "s1",
@@ -62,30 +62,30 @@
         "fat": 18
       },
       "dinner": {
-        "id": "d9",
-        "name": "Salmon + White Wine Sauce",
-        "cal": 680,
-        "protein": 38,
-        "carbs": 50,
+        "id": "d19",
+        "name": "Daal Makhni + Roti + Paneer",
+        "cal": 700,
+        "protein": 25,
+        "carbs": 75,
         "fat": 30
       }
     },
     "Wed": {
       "breakfast": {
-        "id": "b4",
-        "name": "Wow Protein Pancakes ×4",
-        "cal": 256,
-        "protein": 18,
-        "carbs": 24,
-        "fat": 8
+        "id": "b1",
+        "name": "Soaked Oats",
+        "cal": 380,
+        "protein": 12,
+        "carbs": 52,
+        "fat": 10
       },
       "lunch": {
-        "id": "l4",
-        "name": "Turkey Sandwich",
-        "cal": 420,
-        "protein": 28,
-        "carbs": 36,
-        "fat": 8
+        "id": "l2",
+        "name": "Healthy Salad",
+        "cal": 108,
+        "protein": 2,
+        "carbs": 6,
+        "fat": 9
       },
       "snack": {
         "id": "s2",
@@ -96,30 +96,22 @@
         "fat": 4
       },
       "dinner": {
-        "id": "d19",
-        "name": "Daal Makhni + Roti + Paneer",
-        "cal": 700,
-        "protein": 25,
-        "carbs": 75,
-        "fat": 30
+        "id": "d7",
+        "name": "Buffalo Chicken Bowl",
+        "cal": 448,
+        "protein": 37,
+        "carbs": 29,
+        "fat": 21
       }
     },
     "Thu": {
-      "breakfast": {
-        "id": "b1",
-        "name": "Soaked Oats",
-        "cal": 380,
-        "protein": 12,
-        "carbs": 52,
-        "fat": 10
-      },
       "lunch": {
-        "id": "l1",
-        "name": "Broccoli Chicken Bowl",
-        "cal": 548,
-        "protein": 50,
-        "carbs": 74,
-        "fat": 7
+        "id": "l2",
+        "name": "Healthy Salad",
+        "cal": 108,
+        "protein": 2,
+        "carbs": 6,
+        "fat": 9
       },
       "snack": {
         "id": "s5",
@@ -130,12 +122,12 @@
         "fat": 8
       },
       "dinner": {
-        "id": "d10",
-        "name": "Shrimp + Cilantro Rice",
-        "cal": 540,
-        "protein": 30,
-        "carbs": 60,
-        "fat": 15
+        "id": "d11",
+        "name": "Fish Tacos + Mango Salsa",
+        "cal": 450,
+        "protein": 25,
+        "carbs": 40,
+        "fat": 18
       }
     },
     "Fri": {
@@ -148,12 +140,12 @@
         "fat": 12
       },
       "lunch": {
-        "id": "l5",
-        "name": "Café Yumm Bowl",
-        "cal": 480,
-        "protein": 16,
-        "carbs": 68,
-        "fat": 10
+        "id": "l2",
+        "name": "Healthy Salad",
+        "cal": 108,
+        "protein": 2,
+        "carbs": 6,
+        "fat": 9
       },
       "snack": {
         "id": "s3",
@@ -164,30 +156,30 @@
         "fat": 2
       },
       "dinner": {
-        "id": "d15",
-        "name": "Turkey Chili + Salad",
-        "cal": 500,
-        "protein": 35,
-        "carbs": 40,
-        "fat": 20
+        "id": "__eatout__",
+        "name": "Eating out",
+        "cal": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
       }
     },
     "Sat": {
       "breakfast": {
-        "id": "b7",
-        "name": "Blueberry Scones ×2",
-        "cal": 452,
+        "id": "b6",
+        "name": "Veggie Omelette",
+        "cal": 220,
         "protein": 16,
-        "carbs": 24,
-        "fat": 18
+        "carbs": 8,
+        "fat": 12
       },
       "lunch": {
-        "id": "l9",
-        "name": "Rice Noodle Stir-fry",
-        "cal": 460,
-        "protein": 12,
-        "carbs": 58,
-        "fat": 10
+        "id": "__none__",
+        "name": "Skip",
+        "cal": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
       },
       "snack": {
         "id": "s4",
@@ -198,12 +190,12 @@
         "fat": 16
       },
       "dinner": {
-        "id": "d18",
-        "name": "Seekh Kabab + Kachumber",
-        "cal": 580,
-        "protein": 32,
-        "carbs": 20,
-        "fat": 28
+        "id": "__eatout__",
+        "name": "Eating out",
+        "cal": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
       }
     },
     "Sun": {
@@ -216,12 +208,12 @@
         "fat": 5
       },
       "lunch": {
-        "id": "l12",
-        "name": "Pesto Pasta (GF)",
-        "cal": 510,
-        "protein": 18,
-        "carbs": 62,
-        "fat": 14
+        "id": "__none__",
+        "name": "Skip",
+        "cal": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
       },
       "snack": {
         "id": "s10",
@@ -232,12 +224,12 @@
         "fat": 2
       },
       "dinner": {
-        "id": "d21",
-        "name": "Rajma Chawal + Salad",
-        "cal": 620,
-        "protein": 30,
-        "carbs": 70,
-        "fat": 20
+        "id": "d9",
+        "name": "Salmon + White Wine Sauce",
+        "cal": 680,
+        "protein": 38,
+        "carbs": 50,
+        "fat": 30
       }
     }
   }
