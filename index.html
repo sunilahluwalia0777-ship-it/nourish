@@ -1906,8 +1906,8 @@ a.src-link-back:hover { background: #303028; color: var(--gold-light); }
 <div class="pantry-overlay" id="pantry-overlay">
   <div class="pantry-modal">
     <div class="pantry-header">
-      <h2>🥦 Quick pantry check</h2>
-      <p>Mark what you already have — these will be excluded from your grocery list.</p>
+      <h2>🥦 Pantry check</h2>
+      <p>Perishables (proteins, produce, dairy) are always ordered fresh. Check what you already have stocked of grains, spices and condiments — those will be excluded from your grocery list.</p>
       <div class="pantry-progress-row">
         <div class="pantry-progress-bar">
           <div class="pantry-progress-fill" id="pantry-progress-fill" style="width:0%"></div>
@@ -2706,44 +2706,14 @@ function savePantryState() {
 }
 loadPantryState();
 
-function isStaple(name) {
-  const lower = name.toLowerCase();
-  return STAPLES.some(s => lower.includes(s));
-}
-
 // Extract all unique ingredients from the current week's plan
-
-function categorizePantryItem(name) {
-  const n = name.toLowerCase();
-  if (/chicken|salmon|shrimp|turkey|lamb|beef|tuna|cod|fish|egg/.test(n)) return 'Proteins';
-  if (/apple|banana|berry|blueberr|mango|lemon|lime|spinach|broccoli|asparagus|zucchini|carrot|celery|cucumber|tomato|onion|garlic|ginger|pepper|jalap|lettuce|radish|cauliflower|potato|avocado|cilantro|coriander leaf|green onion|mushroom|cabbage|herb|saag|bhindi|okra/.test(n)) return 'Produce';
-  if (/milk|cream|yogurt|chobani|cheese|butter|cottage|paneer|ghee/.test(n)) return 'Dairy & Eggs';
-  if (/rice|quinoa|oat|pasta|bread|tortilla|noodle|flour|lentil|dal|daal|rajma|bean|chickpea|granola|roti|paratha|makki|atta/.test(n)) return 'Grains & Pantry';
-  if (/masala|cumin|coriander|turmeric|chilli|chili|cardamom|mustard|pesto|salsa|hummus|tzatziki|buffalo|mayo|dressing|vinegar|sauce/.test(n)) return 'Condiments & Spices';
-  return 'Frozen & Other';
-}
 
 // Keys are entered once via the API strip in the app and saved to localStorage.
 // They persist across sessions in this browser automatically.
 
 
 
-function isStaple(name) {
-  const lower = name.toLowerCase();
-  return STAPLES.some(s => lower.includes(s));
-}
-
 // Extract all unique ingredients from the current week's plan
-
-function categorizePantryItem(name) {
-  const n = name.toLowerCase();
-  if (/chicken|salmon|shrimp|turkey|lamb|beef|tuna|cod|fish|egg/.test(n)) return 'Proteins';
-  if (/apple|banana|berry|blueberr|mango|lemon|lime|spinach|broccoli|asparagus|zucchini|carrot|celery|cucumber|tomato|onion|garlic|ginger|pepper|jalap|lettuce|radish|cauliflower|potato|avocado|cilantro|coriander leaf|green onion|mushroom|cabbage|herb|saag|bhindi|okra/.test(n)) return 'Produce';
-  if (/milk|cream|yogurt|chobani|cheese|butter|cottage|paneer|ghee/.test(n)) return 'Dairy & Eggs';
-  if (/rice|quinoa|oat|pasta|bread|tortilla|noodle|flour|lentil|dal|daal|rajma|bean|chickpea|granola|roti|paratha|makki|atta/.test(n)) return 'Grains & Pantry';
-  if (/masala|cumin|coriander|turmeric|chilli|chili|cardamom|mustard|pesto|salsa|hummus|tzatziki|buffalo|mayo|dressing|vinegar|sauce/.test(n)) return 'Condiments & Spices';
-  return 'Frozen & Other';
-}
 
 function openPantryCheck() {
   const groups = extractWeekIngredients();
@@ -3766,15 +3736,34 @@ loadSharedConfig();
 
 
 
+// Categories that go straight to grocery list — never show in pantry check
+const PERISHABLE_CATS = ['Proteins','Produce','Dairy & Eggs','Frozen & Other'];
+// Categories that need pantry inventory check
+const PANTRY_CATS = ['Grains & Pantry','Condiments & Spices'];
+
+function isPerishable(category) {
+  return PERISHABLE_CATS.includes(category);
+}
+
 function isStaple(name) {
   const lower = name.toLowerCase();
   return STAPLES.some(s => lower.includes(s));
 }
 
-// Extract all unique ingredients from the current week's plan
+function categorizePantryItem(name) {
+  const n = name.toLowerCase();
+  if (/chicken|salmon|shrimp|turkey|lamb|beef|tuna|cod|fish|egg/.test(n)) return 'Proteins';
+  if (/apple|banana|berry|blueberr|mango|lemon|lime|spinach|broccoli|asparagus|zucchini|carrot|celery|cucumber|tomato|onion|garlic|ginger|pepper|jalap|lettuce|radish|cauliflower|potato|avocado|cilantro|coriander leaf|green onion|mushroom|cabbage|herb|saag|bhindi|okra/.test(n)) return 'Produce';
+  if (/milk|cream|yogurt|chobani|cheese|butter|cottage|paneer|ghee/.test(n)) return 'Dairy & Eggs';
+  if (/rice|quinoa|oat|pasta|bread|tortilla|noodle|flour|lentil|dal|daal|rajma|bean|chickpea|granola|roti|paratha|makki|atta|almond flour|coconut flour/.test(n)) return 'Grains & Pantry';
+  if (/masala|cumin|coriander|turmeric|chilli|chili|cardamom|mustard|pesto|salsa|hummus|tzatziki|buffalo|mayo|dressing|vinegar|sauce|soy sauce|fish sauce|sesame oil|olive oil|avocado oil|coconut milk|broth|stock/.test(n)) return 'Condiments & Spices';
+  if (/frozen|ice cream|edamame|dumpling|potsticker/.test(n)) return 'Frozen & Other';
+  return 'Grains & Pantry'; // default non-perishable assumption for unknowns
+}
+
+// Extract ONLY non-perishable ingredients for pantry check
 function extractWeekIngredients() {
-  const seen = new Map(); // name → { qty, category }
-  const CAT_ORDER = ['Proteins','Produce','Dairy & Eggs','Grains & Pantry','Condiments & Spices','Frozen & Other'];
+  const seen = new Map();
 
   DAYS.forEach((_, di) => {
     MEAL_TYPES.forEach(t => {
@@ -3788,45 +3777,36 @@ function extractWeekIngredients() {
         if (parenMatch) {
           name = parenMatch[1].trim(); qty = parenMatch[2].trim();
         } else {
-          const qtyMatch = raw.match(/^([\d½¼¾⅓⅔]+(?:\/\d+)?(?:\.\d+)?\s*(?:cup|tbsp|tsp|oz|g|kg|lb|lbs|clove|tsp|bunch|can|piece|sprig|pinch|package)?s?)\s+(.+)/i);
+          const qtyMatch = raw.match(/^([\d½¼¾⅓⅔]+(?:\/\d+)?(?:\.\d+)?\s*(?:cup|tbsp|tsp|oz|g|kg|lb|lbs|clove|bunch|can|piece|sprig|pinch|package)?s?)\s+(.+)/i);
           if (qtyMatch) { qty = qtyMatch[1].trim(); name = qtyMatch[2].trim(); }
           else { name = raw.trim(); qty = ''; }
         }
-        // Clean up name
         name = name.replace(/,.*$/, '').replace(/\(.*?\)/g, '').trim();
         if (!name || name.length < 2 || isStaple(name)) return;
+
+        const category = categorizePantryItem(name);
+
+        // SKIP perishables — they always go on the grocery list automatically
+        if (isPerishable(category)) return;
+
         const key = name.toLowerCase();
-        if (!seen.has(key)) seen.set(key, { name, qty, category: categorizePantryItem(name) });
+        if (!seen.has(key)) seen.set(key, { name, qty, category });
       });
     });
   });
 
-  // Group by category
+  // Group by pantry category only
   const groups = {};
   seen.forEach(({ name, qty, category }) => {
     if (!groups[category]) groups[category] = [];
     groups[category].push({ name, qty, key: name.toLowerCase() });
   });
 
-  // Return sorted by category order
   const result = [];
-  CAT_ORDER.forEach(cat => {
+  PANTRY_CATS.forEach(cat => {
     if (groups[cat]) result.push({ cat, items: groups[cat].sort((a,b) => a.name.localeCompare(b.name)) });
   });
-  Object.keys(groups).forEach(cat => {
-    if (!CAT_ORDER.includes(cat)) result.push({ cat, items: groups[cat] });
-  });
   return result;
-}
-
-function categorizePantryItem(name) {
-  const n = name.toLowerCase();
-  if (/chicken|salmon|shrimp|turkey|lamb|beef|tuna|cod|fish|egg/.test(n)) return 'Proteins';
-  if (/apple|banana|berry|blueberr|mango|lemon|lime|spinach|broccoli|asparagus|zucchini|carrot|celery|cucumber|tomato|onion|garlic|ginger|pepper|jalap|lettuce|radish|cauliflower|potato|avocado|cilantro|coriander leaf|green onion|mushroom|cabbage|herb|saag|bhindi|okra/.test(n)) return 'Produce';
-  if (/milk|cream|yogurt|chobani|cheese|butter|cottage|paneer|ghee/.test(n)) return 'Dairy & Eggs';
-  if (/rice|quinoa|oat|pasta|bread|tortilla|noodle|flour|lentil|dal|daal|rajma|bean|chickpea|granola|roti|paratha|makki|atta/.test(n)) return 'Grains & Pantry';
-  if (/masala|cumin|coriander|turmeric|chilli|chili|cardamom|mustard|pesto|salsa|hummus|tzatziki|buffalo|mayo|dressing|vinegar|sauce/.test(n)) return 'Condiments & Spices';
-  return 'Frozen & Other';
 }
 
 
