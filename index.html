@@ -2504,12 +2504,12 @@ const MEALS = {
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const MEAL_TYPES = ['breakfast','lunch','snack','dinner'];
 const TABS = {
-  breakfast:['All',"Chef D'ole",'Veggie','Low carb'],
-  lunch:['All','Chicken','Fish','Turkey','Veggie','Low carb'],
-  snack:['All','Veggie','Low carb'],
-  dinner:['All','Chicken','Fish','Turkey','Indian','Veggie',"Chef D'ole",'Low carb'],
+  breakfast:['All','Everything',"Chef D'ole",'Veggie','Low carb'],
+  lunch:['All','Everything','Chicken','Fish','Turkey','Veggie','Low carb'],
+  snack:['All','Everything','Veggie','Low carb'],
+  dinner:['All','Everything','Chicken','Fish','Turkey','Indian','Veggie',"Chef D'ole",'Low carb'],
 };
-const TAG_MAP = {"Chef D'ole":'chef',Veggie:'veggie','Low carb':'lowcarb',Chicken:'chicken',Fish:'fish',Turkey:'turkey',Indian:'indian',All:null};
+const TAG_MAP = {"Chef D'ole":'chef',Veggie:'veggie','Low carb':'lowcarb',Chicken:'chicken',Fish:'fish',Turkey:'turkey',Indian:'indian',All:null,Everything:'__all__'};
 
 let plan = {};
 DAYS.forEach((_,i) => { plan[i] = {}; });
@@ -2911,8 +2911,14 @@ function renderCarousel() {
       </div>`;
   }
 
-  const list = MEALS[mealType].filter(m =>
-    (!tagFilter || m.tags.includes(tagFilter)) &&
+  // 'Everything' tab shows ALL meals across ALL types
+  const isEverything = activeTab === 'Everything';
+  const sourcePool = isEverything
+    ? Object.entries(MEALS).flatMap(([type, meals]) => meals.map(m => ({...m, _sourceType: type})))
+    : MEALS[mealType].map(m => ({...m, _sourceType: mealType}));
+
+  const list = sourcePool.filter(m =>
+    (!tagFilter || tagFilter === '__all__' || m.tags.includes(tagFilter)) &&
     (!q || m.name.toLowerCase().includes(q) || (m.note||'').toLowerCase().includes(q))
   );
 
@@ -2926,12 +2932,15 @@ function renderCarousel() {
   cards += list.map(m => {
     const isSel = current?.id === m.id;
     const tagsHtml = m.tags.map(t => `<span class="c-tag ${t}">${t}</span>`).join('');
+    const mealTypeBadge = isEverything && m._sourceType !== mealType
+      ? `<span class="c-tag" style="background:var(--gold-pale);color:var(--gold);text-transform:capitalize">${m._sourceType}</span>`
+      : '';
     const srcIcon = m.srcType==='chef'?'📖':m.srcType==='youtube'?'▶':m.srcType==='web'?'🌐':'';
     const srcLabel = m.page ? `${m.page}` : m.srcType!=='simple' ? m.src : '';
     return `<div class="c-card type-${mealType}${isSel?' selected':''}" onclick="selectCarouselMeal('${m.id}')">
       <div class="c-card-color-bar"></div>
       <div class="c-card-body">
-        <div class="c-card-tags">${tagsHtml}</div>
+        <div class="c-card-tags">${mealTypeBadge}${tagsHtml}</div>
         <div class="c-card-name">${m.name}</div>
         <div class="c-card-note">${m.note||''}</div>
         ${srcLabel?`<div style="font-size:9px;color:var(--text3);margin-top:4px">${srcIcon} ${srcLabel}</div>`:''}
