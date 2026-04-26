@@ -1,7 +1,13 @@
 # Nourish — User Guide
 
-**Your personal meal planning and grocery shopping system.**  
+**Your personal meal planning and grocery shopping system.**
 Live at: `sunilahluwalia0777-ship-it.github.io/nourish`
+
+> **2026-04-26 cutover:** the apps now read and write to a private NUC
+> backend (`nutrition-webhook` Cloudflare Worker → SQLite on the NUC)
+> instead of the GitHub Contents API. The HTML lives here on GitHub
+> Pages; the data does not. See `data/README.md` for what happened to
+> the old JSON files.
 
 ---
 
@@ -18,14 +24,22 @@ Live at: `sunilahluwalia0777-ship-it.github.io/nourish`
 ## First-time setup
 
 1. Go to **Settings** (`/nourish/settings.html`)
-2. Enter your **GitHub Personal Access Token** (needs `repo` scope — create one at github.com/settings/tokens)
-3. Enter your **Anthropic API key** (from console.anthropic.com)
+2. Paste your **Browser API token** in the Nutrition backend field
+   (get it from your password manager — entry: `nourish/browser_token`)
+3. Click **Test connection** → expect "✓ Connected · NUC"
 4. Set your preferred stores, servings per meal, and family members
 5. Click **Save all settings**
 
-Your API keys are saved to your browser only. Preferences are saved to GitHub and shared across all devices.
+The browser token is saved to localStorage on this browser only. All
+preferences and data live on the NUC.
 
-> **On a new device or browser** — visit Settings, enter your API keys again, and everything else loads automatically.
+> **On a new device or browser** — visit Settings, paste the browser
+> token, and everything else loads automatically.
+
+> **What about the old GitHub PAT and Anthropic key?** Both are gone.
+> The GitHub PAT is no longer used (NUC is the data store now). The
+> Anthropic key moved server-side — the browser never holds it; the
+> NUC's `/claude/grocery-list` endpoint calls Claude on your behalf.
 
 ---
 
@@ -63,9 +77,9 @@ The calendar shows 7 days across the top with four meal slots per day — Breakf
 When your week is planned, click **Done — get grocery list** in the top right.
 
 This does three things:
-1. Sends your meal plan to Claude (Anthropic AI) which consolidates all ingredients across the week into a categorised grocery list
-2. Saves your weekly plan to GitHub (`data/week_YYYY-MM-DD.json`)
-3. Saves the grocery list to GitHub (`data/grocery_current.json`) so the Grocery app can read it
+1. Asks the NUC's `/claude/grocery-list` endpoint to consolidate the ingredients across the week into a categorised grocery list (Anthropic key lives on the NUC, not in the browser)
+2. Saves your weekly plan to the NUC (`PUT /api/plan/week`)
+3. Saves the grocery list to the NUC (`PUT /api/grocery/current`) so the Grocery app can read it
 
 The grocery list appears in a panel on the right, grouped into: Produce, Proteins, Dairy & Eggs, Grains & Pantry, Condiments & Spices, and Frozen & Other.
 
@@ -81,16 +95,18 @@ The grocery list appears in a panel on the right, grouped into: Produce, Protein
 
 ### Saving and history
 
-Every completed week is automatically saved to your GitHub repo:
+Every completed week is automatically saved to the NUC's SQLite. The
+relevant tables on the server side:
 
 ```
-data/
-├── grocery_current.json   — this week's grocery list
-├── history.json           — index of all saved weeks
-└── week_2026-04-06.json   — individual week plans
+config         — your settings (servings, stores, family members)
+meals          — preloaded + custom meal library
+week_plans     — every saved week's slot assignments
+grocery_items  — current week's grocery list
+pantry         — what you have on hand (drives the pantry-check)
 ```
 
-To load a past week, click **⬡ GitHub** in the header — saved weeks appear in the panel with their average daily calories. Click **Load** to restore any past week to the calendar.
+To load a past week, click **⬡ NUC** in the header — saved weeks appear in the panel with their average daily calories (computed live from `week_plans` joined with `meals`). Click **Load** to restore any past week to the calendar.
 
 ---
 
