@@ -1,0 +1,236 @@
+{
+  "weekOf": "2026-03-31",
+  "savedAt": "2026-04-05T16:59:57.637Z",
+  "days": {
+    "Mon": {
+      "breakfast": {
+        "id": "b1",
+        "name": "Soaked Oats",
+        "cal": 380,
+        "protein": 12,
+        "carbs": 52,
+        "fat": 10
+      },
+      "lunch": {
+        "id": "l2",
+        "name": "Healthy Salad",
+        "cal": 108,
+        "protein": 2,
+        "carbs": 6,
+        "fat": 9
+      },
+      "snack": {
+        "id": "s6",
+        "name": "Spinach Protein Shake",
+        "cal": 220,
+        "protein": 18,
+        "carbs": 28,
+        "fat": 4
+      },
+      "dinner": {
+        "id": "d15",
+        "name": "Turkey Chili + Salad",
+        "cal": 500,
+        "protein": 35,
+        "carbs": 40,
+        "fat": 20
+      }
+    },
+    "Tue": {
+      "breakfast": {
+        "id": "b1",
+        "name": "Soaked Oats",
+        "cal": 380,
+        "protein": 12,
+        "carbs": 52,
+        "fat": 10
+      },
+      "lunch": {
+        "id": "l2",
+        "name": "Healthy Salad",
+        "cal": 108,
+        "protein": 2,
+        "carbs": 6,
+        "fat": 9
+      },
+      "snack": {
+        "id": "s1",
+        "name": "Apple + Almond Butter",
+        "cal": 290,
+        "protein": 6,
+        "carbs": 34,
+        "fat": 18
+      },
+      "dinner": {
+        "id": "d19",
+        "name": "Daal Makhni + Roti + Paneer",
+        "cal": 700,
+        "protein": 25,
+        "carbs": 75,
+        "fat": 30
+      }
+    },
+    "Wed": {
+      "breakfast": {
+        "id": "b1",
+        "name": "Soaked Oats",
+        "cal": 380,
+        "protein": 12,
+        "carbs": 52,
+        "fat": 10
+      },
+      "lunch": {
+        "id": "l2",
+        "name": "Healthy Salad",
+        "cal": 108,
+        "protein": 2,
+        "carbs": 6,
+        "fat": 9
+      },
+      "snack": {
+        "id": "s2",
+        "name": "Chobani + Blueberries",
+        "cal": 200,
+        "protein": 12,
+        "carbs": 18,
+        "fat": 4
+      },
+      "dinner": {
+        "id": "d7",
+        "name": "Buffalo Chicken Bowl",
+        "cal": 448,
+        "protein": 37,
+        "carbs": 29,
+        "fat": 21
+      }
+    },
+    "Thu": {
+      "lunch": {
+        "id": "l2",
+        "name": "Healthy Salad",
+        "cal": 108,
+        "protein": 2,
+        "carbs": 6,
+        "fat": 9
+      },
+      "snack": {
+        "id": "s5",
+        "name": "Hummus + Veggie Sticks",
+        "cal": 180,
+        "protein": 6,
+        "carbs": 18,
+        "fat": 8
+      },
+      "dinner": {
+        "id": "d11",
+        "name": "Fish Tacos + Mango Salsa",
+        "cal": 450,
+        "protein": 25,
+        "carbs": 40,
+        "fat": 18
+      }
+    },
+    "Fri": {
+      "breakfast": {
+        "id": "b6",
+        "name": "Veggie Omelette",
+        "cal": 220,
+        "protein": 16,
+        "carbs": 8,
+        "fat": 12
+      },
+      "lunch": {
+        "id": "l2",
+        "name": "Healthy Salad",
+        "cal": 108,
+        "protein": 2,
+        "carbs": 6,
+        "fat": 9
+      },
+      "snack": {
+        "id": "s3",
+        "name": "Protein Muffin",
+        "cal": 134,
+        "protein": 10,
+        "carbs": 19,
+        "fat": 2
+      },
+      "dinner": {
+        "id": "__eatout__",
+        "name": "Eating out",
+        "cal": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
+      }
+    },
+    "Sat": {
+      "breakfast": {
+        "id": "b6",
+        "name": "Veggie Omelette",
+        "cal": 220,
+        "protein": 16,
+        "carbs": 8,
+        "fat": 12
+      },
+      "lunch": {
+        "id": "__none__",
+        "name": "Skip",
+        "cal": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
+      },
+      "snack": {
+        "id": "s4",
+        "name": "Walnuts + Fruit",
+        "cal": 220,
+        "protein": 6,
+        "carbs": 18,
+        "fat": 16
+      },
+      "dinner": {
+        "id": "__eatout__",
+        "name": "Eating out",
+        "cal": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
+      }
+    },
+    "Sun": {
+      "breakfast": {
+        "id": "b2",
+        "name": "Banana Nut Protein Muffins ×2",
+        "cal": 268,
+        "protein": 20,
+        "carbs": 38,
+        "fat": 5
+      },
+      "lunch": {
+        "id": "__none__",
+        "name": "Skip",
+        "cal": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
+      },
+      "snack": {
+        "id": "s10",
+        "name": "Cottage Cheese + Pineapple",
+        "cal": 180,
+        "protein": 14,
+        "carbs": 22,
+        "fat": 2
+      },
+      "dinner": {
+        "id": "d9",
+        "name": "Salmon + White Wine Sauce",
+        "cal": 680,
+        "protein": 38,
+        "carbs": 50,
+        "fat": 30
+      }
+    }
+  }
+}

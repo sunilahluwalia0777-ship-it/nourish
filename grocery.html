@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Shop — Grocery List</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #F2F2F7;
+  --card: #FFFFFF;
+  --border: #E5E5EA;
+  --text: #1C1C1E;
+  --text2: #6C6C70;
+  --text3: #AEAEB2;
+  --costco: #E8132B;
+  --costco-pale: #FFF0F1;
+  --safeway: #E87722;
+  --safeway-pale: #FFF5EC;
+  --instacart: #00A650;
+  --instacart-pale: #EDFAF3;
+  --indian: #7B2FBE;
+  --indian-pale: #F5EDFF;
+  --unassigned: #8E8E93;
+  --unassigned-pale: #F2F2F7;
+  --sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --radius: 14px;
+  --tab-h: 56px;
+  --header-h: 116px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html { height: 100%; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ── */
+.app-header {
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 16px 0;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.app-title { font-size: 22px; font-weight: 700; color: var(--text); }
+.app-title span { font-weight: 400; color: var(--text2); font-size: 14px; margin-left: 8px; }
+.header-btns { display: flex; gap: 8px; }
+
+.hbtn {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 20px;
+  border: none;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.hbtn:active { opacity: .7; }
+.hbtn.ghost { background: var(--bg); color: var(--text2); }
+.hbtn.primary { background: var(--instacart); color: #fff; }
+
+/* Progress bar */
+.progress-bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  margin-bottom: 0;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--instacart);
+  border-radius: 2px;
+  transition: width .4s ease;
+}
+
+/* ── Store tabs ── */
+.store-tabs {
+  display: flex;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  flex-shrink: 0;
+}
+.store-tabs::-webkit-scrollbar { display: none; }
+
+.store-tab {
+  flex: 1;
+  min-width: 72px;
+  height: var(--tab-h);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--sans);
+  position: relative;
+  transition: background .15s;
+  padding: 0 4px;
+}
+.store-tab:active { background: var(--bg); }
+.store-tab .tab-icon { font-size: 18px; line-height: 1; }
+.store-tab .tab-label { font-size: 10px; font-weight: 600; color: var(--text3); letter-spacing: 0.3px; }
+.store-tab .tab-count {
+  position: absolute;
+  top: 8px; right: 12px;
+  background: var(--text3);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 8px;
+  min-width: 16px;
+  text-align: center;
+}
+.store-tab.active .tab-label { font-weight: 700; }
+.store-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 10%; right: 10%;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+}
+.store-tab[data-store="all"].active .tab-label { color: var(--text); }
+.store-tab[data-store="all"].active::after { background: var(--text); }
+.store-tab[data-store="all"].active .tab-count { background: var(--text); }
+.store-tab[data-store="costco"].active .tab-label { color: var(--costco); }
+.store-tab[data-store="costco"].active::after { background: var(--costco); }
+.store-tab[data-store="costco"].active .tab-count { background: var(--costco); }
+.store-tab[data-store="safeway"].active .tab-label { color: var(--safeway); }
+.store-tab[data-store="safeway"].active::after { background: var(--safeway); }
+.store-tab[data-store="safeway"].active .tab-count { background: var(--safeway); }
+.store-tab[data-store="instacart"].active .tab-label { color: var(--instacart); }
+.store-tab[data-store="instacart"].active::after { background: var(--instacart); }
+.store-tab[data-store="instacart"].active .tab-count { background: var(--instacart); }
+.store-tab[data-store="indian"].active .tab-label { color: var(--indian); }
+.store-tab[data-store="indian"].active::after { background: var(--indian); }
+.store-tab[data-store="indian"].active .tab-count { background: var(--indian); }
+.store-tab[data-store="unassigned"].active .tab-label { color: var(--unassigned); }
+.store-tab[data-store="unassigned"].active::after { background: var(--unassigned); }
+
+/* ── Main list area ── */
+.list-area {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 12px 120px;
+  background: var(--card);
+}
+
+/* Category group */
+.cat-group { margin-bottom: 14px; background: var(--card); border-radius: 10px; overflow: hidden; }
+.cat-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 8px 12px 6px;
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  background: var(--bg);
+}
+
+.g-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.g-table td {
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.g-table tr:last-child td { border-bottom: none; }
+.g-table tr.checked { opacity: .4; }
+.g-table tr.checked .item-name { text-decoration: line-through; color: var(--text3); }
+
+.col-check { width: 34px; }
+.col-name  { }
+.col-qty   { width: 86px; }
+.col-store { width: 86px; text-align: right; padding-right: 8px; }
+
+.check-zone {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; margin: 0 auto;
+}
+.check-circle {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text3);
+  display: flex; align-items: center; justify-content: center;
+  transition: all .2s;
+  font-size: 10px;
+  color: transparent;
+}
+.g-table tr.checked .check-circle {
+  background: var(--instacart);
+  border-color: var(--instacart);
+  color: #fff;
+}
+
+.item-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item-qty-input {
+  width: 100%;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--text2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 3px 5px;
+  transition: all .15s;
+}
+.item-qty-input:hover { border-color: var(--border); background: var(--bg); }
+.item-qty-input:focus { border-color: var(--instacart); outline: none; background: var(--card); color: var(--text); }
+.item-qty-input::placeholder { color: var(--text3); font-style: italic; font-size: 11px; }
+
+.store-pill {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  border: none;
+  font-family: var(--sans);
+  transition: all .15s;
+}
+.store-pill:active { transform: scale(.94); }
+.store-pill[data-store="costco"]     { background: var(--costco-pale);     color: var(--costco); }
+.store-pill[data-store="safeway"]    { background: var(--safeway-pale);    color: var(--safeway); }
+.store-pill[data-store="instacart"]  { background: var(--instacart-pale);  color: var(--instacart); }
+.store-pill[data-store="indian"]     { background: var(--indian-pale);     color: var(--indian); }
+.store-pill[data-store="unassigned"] { background: var(--unassigned-pale); color: var(--unassigned); }
+
+@media (max-width: 480px) {
+  .col-qty   { width: 65px; }
+  .col-store { width: 70px; }
+  .item-name { font-size: 13px; }
+}
+
+/* ── Bottom action bar ── */
+.bottom-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 10px;
+  z-index: 20;
+}
+.bottom-bar button {
+  flex: 1;
+  height: 50px;
+  border-radius: 14px;
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.bottom-bar button:active { opacity: .8; }
+.btn-clear { background: var(--bg); color: var(--text2); font-weight: 600; }
+
+/* ── Settings sheet ── */
+.sheet-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 50;
+  align-items: flex-end;
+}
+.sheet-overlay.open { display: flex; }
+.sheet {
+  background: var(--card);
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  padding: 20px 20px 40px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.sheet-handle {
+  width: 36px; height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 0 auto 20px;
+}
+.sheet h2 { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+.sheet-field { margin-bottom: 14px; }
+.sheet-field label { display: block; font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 6px; letter-spacing: 0.3px; }
+.sheet-field input {
+  width: 100%; padding: 12px 14px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 10px; font-family: var(--sans); font-size: 15px;
+  color: var(--text); outline: none;
+}
+.sheet-field input:focus { border-color: var(--instacart); }
+.sheet-save {
+  width: 100%; height: 50px;
+  background: var(--text); color: #fff;
+  font-family: var(--sans); font-size: 16px; font-weight: 700;
+  border: none; border-radius: 14px; cursor: pointer; margin-top: 4px;
+}
+
+/* ── Nourish import banner ── */
+.import-banner {
+  background: var(--instacart-pale);
+  border: 1px solid rgba(0,166,80,.2);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.import-banner .ib-icon { font-size: 24px; }
+.import-banner .ib-text { flex: 1; }
+.import-banner .ib-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.import-banner .ib-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.import-banner .ib-btn {
+  background: var(--instacart); color: #fff;
+  font-family: var(--sans); font-size: 13px; font-weight: 700;
+  padding: 8px 14px; border-radius: 10px; border: none; cursor: pointer;
+}
+
+/* ── Empty state ── */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 60px 32px; text-align: center; gap: 12px;
+}
+.empty-state .em-icon { font-size: 48px; }
+.empty-state .em-title { font-size: 20px; font-weight: 700; }
+.empty-state .em-sub { font-size: 14px; color: var(--text2); line-height: 1.6; }
+.empty-state .em-btn {
+  margin-top: 8px; background: var(--instacart); color: #fff;
+  font-family: var(--sans); font-size: 15px; font-weight: 700;
+  padding: 13px 28px; border-radius: 14px; border: none; cursor: pointer;
+}
+
+/* ── Add item ── */
+.add-item-bar {
+  background: var(--card);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+.add-item-bar input {
+  flex: 1; border: none; outline: none; font-family: var(--sans);
+  font-size: 15px; color: var(--text); background: transparent;
+}
+.add-item-bar input::placeholder { color: var(--text3); }
+.add-item-bar button {
+  background: var(--instacart); color: #fff;
+  border: none; border-radius: 8px; padding: 6px 14px;
+  font-family: var(--sans); font-size: 13px; font-weight: 700; cursor: pointer;
+}
+
+/* ── Toast ── */
+.toast {
+  position: fixed; bottom: 90px; left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--text); color: #fff;
+  padding: 10px 20px; border-radius: 24px; font-size: 13px; font-weight: 600;
+  opacity: 0; transition: all .3s; pointer-events: none; z-index: 100; white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+::-webkit-scrollbar { width: 0; }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div class="header-top">
+    <div class="app-title">Shop <span id="week-label"></span></div>
+    <div class="header-btns">
+      <a class="hbtn ghost" href="index.html" style="text-decoration:none" title="Open Meal Planner">🍽 Nourish</a>
+      <button class="hbtn ghost" onclick="openSettings()" title="Settings">⚙</button>
+      <button class="hbtn ghost" onclick="importFromNourish()" title="Import latest grocery list from Nourish">↓ Import</button>
+    </div>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+</div>
+
+<div class="store-tabs" id="store-tabs">
+  <button class="store-tab active" data-store="all" onclick="setTab('all',this)">
+    <span class="tab-icon">🛒</span>
+    <span class="tab-label">ALL</span>
+    <span class="tab-count" id="cnt-all">0</span>
+  </button>
+  <button class="store-tab" data-store="costco" onclick="setTab('costco',this)">
+    <span class="tab-icon">🏪</span>
+    <span class="tab-label">COSTCO</span>
+    <span class="tab-count" id="cnt-costco">0</span>
+  </button>
+  <button class="store-tab" data-store="safeway" onclick="setTab('safeway',this)">
+    <span class="tab-icon">🌿</span>
+    <span class="tab-label">SAFEWAY</span>
+    <span class="tab-count" id="cnt-safeway">0</span>
+  </button>
+  <button class="store-tab" data-store="instacart" onclick="setTab('instacart',this)">
+    <span class="tab-icon">🚗</span>
+    <span class="tab-label">INSTACART</span>
+    <span class="tab-count" id="cnt-instacart">0</span>
+  </button>
+  <button class="store-tab" data-store="indian" onclick="setTab('indian',this)">
+    <span class="tab-icon">🌶</span>
+    <span class="tab-label">INDIAN</span>
+    <span class="tab-count" id="cnt-indian">0</span>
+  </button>
+  <button class="store-tab" data-store="unassigned" onclick="setTab('unassigned',this)">
+    <span class="tab-icon">·</span>
+    <span class="tab-label">OTHER</span>
+    <span class="tab-count" id="cnt-unassigned">0</span>
+  </button>
+</div>
+
+<div class="list-area" id="list-area"></div>
+
+<div class="bottom-bar" id="bottom-bar">
+  <button class="btn-clear" onclick="clearChecked()">Clear done</button>
+</div>
+
+<!-- Settings sheet -->
+<div class="sheet-overlay" id="settings-overlay" onclick="handleSheetClick(event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2>Settings</h2>
+    <div style="font-size:13px;color:#666;margin-bottom:16px">Signed in via cookie. Use Sign out to switch account or revoke this device.</div>
+    <button class="sheet-save" style="background:#666" onclick="signOut()">Sign out</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════
+// NUC BACKEND (replaces GitHub after 2026-04-26 cutover)
+// ═══════════════════════════════════════════
+const NUC_API = 'https://nutrition-webhook.sunilahluwalia0777.workers.dev/api';
+
+async function nucCall(method, path, body) {
+  const headers = { 'Content-Type': 'application/json' };
+  const token = localStorage.getItem('nourish_browser_token');
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const res = await fetch(NUC_API + path, {
+    method,
+    headers,
+    credentials: 'include',
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (res.status === 401) {
+    const next = encodeURIComponent(location.href);
+    location.href = 'https://nutrition-webhook.sunilahluwalia0777.workers.dev/login?next=' + next;
+    throw new Error('Redirecting to sign-in…');
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${method} ${path} → ${res.status}: ${text.slice(0, 200)}`);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+function cleanupLegacyKeys() {
+  ['gh_user','gh_repo','gh_token','bootstrap_token',
+   'shop_gh_user','shop_gh_repo','shop_gh_token',
+   'nk',
+  ].forEach(k => localStorage.removeItem(k));
+}
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+const STORES = ['costco','safeway','instacart','indian','unassigned'];
+const STORE_LABELS = { costco:'Costco', safeway:'Safeway', instacart:'Instacart', indian:'Indian Shop', unassigned:'Other' };
+
+// Smart pre-assignment rules
+const STORE_RULES = {
+  costco: [
+    'chicken','salmon','turkey','shrimp','lamb','beef','pork',
+    'egg','olive oil','avocado oil','almond','walnut','nut',
+    'cheese','butter','yogurt','cottage cheese','chobani',
+    'paper','towel','toilet','detergent','tide',
+    'protein powder','whey','quinoa','rice','oat','granola',
+  ],
+  indian: [
+    'garam masala','cumin','coriander','turmeric','chilli powder','chili powder',
+    'cardamom','clove','cinnamon','mustard seed','fenugreek','asafoetida',
+    'daal','dal','lentil','rajma','kidney bean','chickpea','chana',
+    'paneer','ghee','atta','roti','naan','paratha','makki','besan',
+    'tamarind','curry leaf','methi','coriander leaf','cilantro',
+    'basmati','jasmine','rice','adobo','seekh','kabab masala',
+    'chaat masala','black salt','jeera','bhindi','okra','saag',
+    'coconut milk','thai','fish sauce',
+  ],
+  instacart: [
+    'blueberr','strawberr','berr','mango','apple','banana','lemon','lime',
+    'spinach','broccoli','asparagus','zucchini','carrot','celery','cucumber',
+    'tomato','onion','garlic','ginger','bell pepper','jalapeño','jalapeno',
+    'lettuce','green','radish','cauliflower','potato','avocado',
+    'milk','cream','sour cream','parmesan','mozzarella','feta',
+    'pasta','bread','tortilla','noodle','flour',
+    'pesto','salsa','hummus','tzatziki','mustard','soy sauce','sesame',
+    'dressing','vinegar','ketchup','mayo','hot sauce','buffalo',
+    'almond milk','oat milk',
+  ],
+};
+
+let items = []; // [{id, name, qty, store, checked, category}]
+let activeTab = 'all';
+let gCounter = 0;
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+(function init() {
+  cleanupLegacyKeys();
+
+  // Load saved list
+  const saved = localStorage.getItem('shop_items');
+  if (saved) {
+    try { items = JSON.parse(saved); } catch(e) { items = []; }
+  }
+
+  // Week label
+  const now = new Date();
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - ((now.getDay()+6)%7));
+  const sun = new Date(mon); sun.setDate(mon.getDate()+6);
+  const fmt = d => d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  document.getElementById('week-label').textContent = `${fmt(mon)}–${fmt(sun)}`;
+
+  render();
+})();
+
+// ═══════════════════════════════════════════
+// STORE AUTO-ASSIGNMENT
+// ═══════════════════════════════════════════
+function autoAssign(name) {
+  const lower = name.toLowerCase();
+  // Check Indian first (more specific rules)
+  for (const kw of STORE_RULES.indian) {
+    if (lower.includes(kw)) return 'indian';
+  }
+  for (const kw of STORE_RULES.costco) {
+    if (lower.includes(kw)) return 'costco';
+  }
+  for (const kw of STORE_RULES.instacart) {
+    if (lower.includes(kw)) return 'instacart';
+  }
+  return 'safeway'; // default
+}
+
+// ═══════════════════════════════════════════
+// PARSE GROCERY STRING → item object
+// ═══════════════════════════════════════════
+const CATEGORY_MAP = {
+  'Produce':            ['apple','banana','berry','blueberr','strawberr','mango','lemon','lime','spinach','broccoli','asparagus','zucchini','carrot','celery','cucumber','tomato','onion','garlic','ginger','pepper','jalapeño','jalapeno','lettuce','radish','cauliflower','potato','avocado','herb','cilantro','coriander leaf','green onion','scallion','mushroom','kale','cabbage'],
+  'Proteins':           ['chicken','salmon','shrimp','fish','turkey','lamb','beef','tuna','cod','egg'],
+  'Dairy & Eggs':       ['milk','cream','yogurt','chobani','cheese','butter','cottage','paneer','ghee'],
+  'Grains & Pantry':    ['rice','quinoa','oat','pasta','bread','tortilla','noodle','flour','lentil','dal','daal','rajma','bean','chickpea','granola','cracker'],
+  'Oils & Condiments':  ['oil','pesto','salsa','hummus','mustard','soy sauce','sesame','vinegar','sauce','dressing','mayo','ketchup'],
+  'Spices':             ['masala','cumin','coriander','turmeric','chilli','chili','pepper','salt','cardamom','cinnamon','clove','fenugreek','seed','spice'],
+  'Nuts & Seeds':       ['almond','walnut','cashew','nut','seed','chia','flax','hemp'],
+  'Beverages & Other':  ['milk','tea','coffee','juice','water','protein powder','whey'],
+};
+
+function categorise(name) {
+  const lower = name.toLowerCase();
+  for (const [cat, kws] of Object.entries(CATEGORY_MAP)) {
+    if (kws.some(k => lower.includes(k))) return cat;
+  }
+  return 'Other';
+}
+
+function parseGroceryString(raw) {
+  // Format: "Chicken breast (2 lbs)" or "2 cups rolled oats" or "Blueberries (2 cups)"
+  const parenMatch = raw.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+  if (parenMatch) {
+    return { name: parenMatch[1].trim(), qty: parenMatch[2].trim() };
+  }
+  const qtyMatch = raw.match(/^([\d½¼¾⅓⅔]+(?:\/\d+)?(?:\.\d+)?\s*(?:cup|tbsp|tsp|oz|g|kg|lb|lbs|can|bunch|piece|clove|sprig|pinch|package)?s?)\s+(.+)/i);
+  if (qtyMatch) {
+    return { name: qtyMatch[2].trim(), qty: qtyMatch[1].trim() };
+  }
+  return { name: raw.trim(), qty: '' };
+}
+
+function addItem(raw, overrideStore) {
+  const { name, qty } = parseGroceryString(raw);
+  if (!name) return;
+  const id = 'i' + (++gCounter) + '_' + Date.now();
+  const store = overrideStore || autoAssign(name);
+  items.push({ id, name, qty, store, checked: false, category: categorise(name) });
+}
+
+// ═══════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════
+function render() {
+  updateCounts();
+  updateProgress();
+  renderList();
+  saveLocal();
+}
+
+function updateCounts() {
+  const unchecked = items.filter(i => !i.checked);
+  document.getElementById('cnt-all').textContent = unchecked.length;
+  STORES.forEach(s => {
+    const el = document.getElementById(`cnt-${s}`);
+    if (el) el.textContent = unchecked.filter(i => i.store===s).length;
+  });
+}
+
+function updateProgress() {
+  const total = items.length;
+  const done = items.filter(i => i.checked).length;
+  const pct = total > 0 ? Math.round(done/total*100) : 0;
+  document.getElementById('progress-fill').style.width = pct + '%';
+}
+
+function renderList() {
+  const area = document.getElementById('list-area');
+  let visible = activeTab === 'all' ? items : items.filter(i => i.store === activeTab);
+
+  if (items.length === 0) {
+    area.innerHTML = `<div class="empty-state">
+      <div class="em-icon">🛒</div>
+      <div class="em-title">Your list is empty</div>
+      <div class="em-sub">Import from Nourish to populate your weekly grocery list, or add items manually below.</div>
+      <button class="em-btn" onclick="importFromNourish()">↓ Import from Nourish</button>
+    </div>`;
+    return;
+  }
+
+  // Group by category
+  const cats = {};
+  visible.forEach(item => {
+    const cat = item.category || 'Other';
+    if (!cats[cat]) cats[cat] = [];
+    cats[cat].push(item);
+  });
+
+  // Sort: unchecked first within each category
+  const catOrder = ['Produce','Proteins','Dairy & Eggs','Grains & Pantry','Oils & Condiments','Spices','Nuts & Seeds','Beverages & Other','Other'];
+  const sortedCats = Object.keys(cats).sort((a,b) => {
+    const ai = catOrder.indexOf(a), bi = catOrder.indexOf(b);
+    return (ai<0?99:ai) - (bi<0?99:bi);
+  });
+
+  // Add item bar
+  let html = `<div class="add-item-bar">
+    <input type="text" id="add-input" placeholder="Add item…" onkeydown="if(event.key==='Enter')addManual()">
+    <button onclick="addManual()">Add</button>
+  </div>`;
+
+  if (visible.length === 0) {
+    html += `<div class="empty-state" style="padding:40px 20px">
+      <div class="em-icon">✓</div>
+      <div class="em-title">All done here!</div>
+      <div class="em-sub">No items left for this store.</div>
+    </div>`;
+  } else {
+    sortedCats.forEach(cat => {
+      const catItems = cats[cat];
+      const sorted = [...catItems].sort((a,b) => (a.checked?1:0)-(b.checked?1:0));
+      html += `<div class="cat-group"><div class="cat-label">${cat}</div><table class="g-table"><tbody>${sorted.map(item=>renderItem(item)).join('')}</tbody></table></div>`;
+    });
+  }
+
+  area.innerHTML = html;
+}
+
+function renderItem(item) {
+  const storeLabel = STORE_LABELS[item.store] || 'Other';
+  return `<tr class="${item.checked?'checked':''}" id="gi-${item.id}">
+    <td class="col-check">
+      <div class="check-zone" onclick="toggleCheck('${item.id}')">
+        <div class="check-circle">${item.checked?'✓':''}</div>
+      </div>
+    </td>
+    <td class="col-name">
+      <div class="item-name">${item.name}</div>
+    </td>
+    <td class="col-qty">
+      <input class="item-qty-input" type="text"
+        value="${item.qty||''}"
+        placeholder="qty"
+        onchange="updateQty('${item.id}', this.value)"
+        onclick="event.stopPropagation()"
+        ${item.checked?'disabled':''}
+      >
+    </td>
+    <td class="col-store">
+      <button class="store-pill" data-store="${item.store}" onclick="cycleStore('${item.id}')">${storeLabel}</button>
+    </td>
+  </tr>`;
+}
+
+// ═══════════════════════════════════════════
+// INTERACTIONS
+// ═══════════════════════════════════════════
+function toggleCheck(id) {
+  // id may be a string (manual add) or number (server-assigned). String IDs
+  // skip the server PATCH since they're not in the DB.
+  const item = items.find(i => i.id == id);  // == handles number/string
+  if (!item) return;
+  item.checked = !item.checked;
+  const el = document.getElementById("gi-" + id);
+  if (el) {
+    el.classList.toggle("checked", item.checked);
+    el.querySelector(".check-circle").textContent = item.checked ? "✓" : "";
+    const qtyInput = el.querySelector(".item-qty-input");
+    if (qtyInput) qtyInput.disabled = item.checked;
+    const tbody = el.parentElement;
+    if (item.checked) tbody.appendChild(el);
+    else tbody.prepend(el);
+  }
+  updateCounts();
+  updateProgress();
+  saveLocal();
+  // Push status to server (numeric IDs only)
+  if (typeof item.id === 'number') {
+    nucCall('PATCH', '/grocery/items/' + item.id, {status: item.checked ? 'bought' : 'pending'})
+      .catch(e => console.warn('PATCH status failed:', e.message));
+  }
+}
+
+function cycleStore(id) {
+  const item = items.find(i => i.id == id);
+  if (!item) return;
+  const idx = STORES.indexOf(item.store);
+  item.store = STORES[(idx+1) % STORES.length];
+  const pill = document.querySelector(`#gi-${id} .store-pill`);
+  if (pill) { pill.dataset.store = item.store; pill.textContent = STORE_LABELS[item.store] || 'Other'; }
+  updateCounts();
+  saveLocal();
+  // Push store to server (numeric IDs only)
+  if (typeof item.id === 'number') {
+    nucCall('PUT', '/grocery/items/' + item.id + '/store', {store: item.store})
+      .catch(e => console.warn('PUT store failed:', e.message));
+  }
+}
+
+function updateQty(id, val) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  item.qty = val.trim();
+  saveLocal();
+}
+
+function setTab(store, el) {
+  activeTab = store;
+  document.querySelectorAll('.store-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderList();
+}
+
+function clearChecked() {
+  const count = items.filter(i => i.checked).length;
+  if (!count) { showToast('Nothing to clear'); return; }
+  items = items.filter(i => !i.checked);
+  render();
+  showToast(`${count} item${count>1?'s':''} removed`);
+}
+
+function addManual() {
+  const input = document.getElementById('add-input');
+  const val = input?.value.trim();
+  if (!val) return;
+  addItem(val);
+  input.value = '';
+  render();
+  showToast(`"${val}" added`);
+}
+
+// ═══════════════════════════════════════════
+// GITHUB — IMPORT FROM NOURISH
+// ═══════════════════════════════════════════
+async function importFromNourish() {
+  // No token precheck — cookie auth is HttpOnly and invisible to JS. nucCall
+  // handles 401 by redirecting to /login (which bounces back here on success).
+  showToast('Fetching grocery list…');
+
+  let data;
+  try {
+    data = await nucCall('GET', '/grocery/current');
+  } catch(e) {
+    showToast('❌ ' + e.message);
+    return;
+  }
+
+  if (!data?.groceries || !Object.keys(data.groceries).length) {
+    showToast('Grocery list is empty — open Nourish and click Done first');
+    return;
+  }
+
+  // ── One-shot localStorage migration (legacy → server) ──────────────────────
+  // If the user has a legacy `shop_assignments` map, push each as a server-side
+  // store assignment for items that have no server-side store yet. Then delete
+  // the localStorage entry so this only runs once.
+  const legacyAssign = (() => {
+    try { return JSON.parse(localStorage.getItem('shop_assignments') || '{}'); }
+    catch(e) { return {}; }
+  })();
+  const willMigrate = Object.keys(legacyAssign).length > 0;
+  const migrationPromises = [];
+
+  // ── Build local items from server response ────────────────────────────────
+  items = [];
+  gCounter = 0;
+  Object.entries(data.groceries).forEach(([category, list]) => {
+    list.forEach(it => {
+      const name = parseGroceryString(it.item).name || it.item;
+      const qty  = parseGroceryString(it.item).qty || '';
+      let store = it.store || null;
+      // Legacy migration: if server has no store but localStorage did, push it up
+      if (!store && legacyAssign[name.toLowerCase()]) {
+        store = legacyAssign[name.toLowerCase()];
+        migrationPromises.push(
+          nucCall('PUT', '/grocery/items/' + it.id + '/store', {store})
+            .catch(e => console.warn('legacy store migration failed:', e.message))
+        );
+      }
+      // Fall back to auto-assign if still no store
+      if (!store) store = autoAssign(name);
+      items.push({
+        id: it.id,             // ← server id (matches grocery_items.id)
+        name, qty, store,
+        checked: it.status === 'bought',
+        category: categorise(name),
+      });
+    });
+  });
+
+  if (willMigrate) {
+    Promise.all(migrationPromises).then(() => {
+      localStorage.removeItem('shop_assignments');
+      console.log('Legacy shop_assignments migrated to server, then cleared.');
+    });
+  }
+
+  render();
+  showToast(`✓ ${items.length} items imported (week of ${data.weekOf || '?'})`);
+}
+
+// Store assignments now live on the server (PUT /grocery/items/{id}/store
+// fires from cycleStore). The legacy localStorage helpers are gone.
+
+// ═══════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════
+function openSettings() {
+  document.getElementById('settings-overlay').classList.add('open');
+}
+
+function signOut() {
+  ['nourish_browser_token','shop_items','shop_assignments'].forEach(k => localStorage.removeItem(k));
+  location.href = 'https://nutrition-webhook.sunilahluwalia0777.workers.dev/logout';
+}
+
+function handleSheetClick(e) {
+  if (e.target === e.currentTarget) {
+    document.getElementById('settings-overlay').classList.remove('open');
+  }
+}
+
+// ═══════════════════════════════════════════
+// PERSISTENCE & UTILS
+// ═══════════════════════════════════════════
+function saveLocal() {
+  localStorage.setItem('shop_items', JSON.stringify(items));
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// Config loading deferred — the grocery app doesn't actually use the
+// servings/cookTime/avoids fields here (no DOM elements with those IDs in
+// this file). If we ever do, fetch via:
+//   const cfg = await nucCall('GET', '/config');
+//   ...apply fields...
+
+window.updateStoresFromConfig = (s) => { console.log("stores updated", s); };
+</script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+{
+  "dinner": [
+    {
+      "id": "custom_1775408038034",
+      "name": "Boom boom Salmon + cilantro rice",
+      "cal": 0,
+      "tags": [
+        "custom"
+      ],
+      "note": "",
+      "src": "Your recipe",
+      "srcType": "simple",
+      "serving": "1 serving",
+      "ingredients": [],
+      "steps": [],
+      "nutrition": {
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0,
+        "fiber": 0,
+        "sugar": 0,
+        "sodium": 0,
+        "cholesterol": 0
+      }
+    }
+  ]
+}

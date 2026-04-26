@@ -1,0 +1,77 @@
+{
+  "weekOf": "2026-03-30",
+  "savedAt": "2026-04-05T18:29:02.803Z",
+  "groceries": {
+    "Produce": [
+      "Bananas (6 whole)",
+      "Broccoli florets (4 cups)",
+      "Spinach (2 cups + handful)",
+      "Blueberries (4 cups)",
+      "Apples (2 medium)",
+      "Asparagus (4 cups)",
+      "Lettuce (1 head)",
+      "Tomatoes (3 whole)",
+      "Cucumbers (2 whole)",
+      "Onions (3 whole)",
+      "Bell peppers (2 whole)",
+      "Carrots (2 cups sticks)",
+      "Snap peas (1 cup)",
+      "Ginger (fresh)",
+      "Garlic (20 cloves)",
+      "Cilantro (2 cups chopped)",
+      "Jalapeños (4 whole)",
+      "Lemons (2 whole)",
+      "Dill (fresh)",
+      "Pineapple chunks (1 cup)"
+    ],
+    "Proteins": [
+      "Chicken breast (2 lbs)",
+      "Salmon fillet (300g)",
+      "Turkey slices (8 oz)",
+      "Paneer (100g)",
+      "Large shrimp (300g)",
+      "Ground lamb (400g)",
+      "Eggs (8 whole)"
+    ],
+    "Dairy & Eggs": [
+      "Almond milk (3 cups)",
+      "Plain full-fat Chobani yogurt (3 cups)",
+      "Greek yogurt (2 cups)",
+      "Shredded cheese (4 tbsp)",
+      "Heavy cream (6 tbsp)",
+      "Cottage cheese no-salt (4 cups)",
+      "Cottage cheese small-curd (1 cup)",
+      "Egg whites (1 cup)",
+      "Butter (10 tbsp)",
+      "Sour cream (4 tbsp)"
+    ],
+    "Grains & Pantry": [
+      "Wild rice (1 cup)",
+      "Cilantro lime rice (3 cups)",
+      "Almond butter (4 tbsp)",
+      "Applesauce (1 cup)",
+      "Agave (6 tbsp)",
+      "Baking powder (8 tsp)"
+    ],
+    "Condiments & Spices": [
+      "Honey (4 tbsp)",
+      "Soy sauce (4 tbsp)",
+      "Salsa (6 tbsp)",
+      "Olive oil (4 tbsp)",
+      "Yumm sauce (4 tbsp)",
+      "Sesame oil (2 tsp)",
+      "Ginger-garlic paste (6 tbsp)",
+      "Garam masala",
+      "Kashmiri chilli",
+      "Chaat masala",
+      "Lemon juice",
+      "Cinnamon",
+      "Garlic powder",
+      "Black pepper"
+    ],
+    "Frozen & Other": [
+      "Frozen blueberries (1 cup)",
+      "Stevia drops (30 drops)"
+    ]
+  }
+}

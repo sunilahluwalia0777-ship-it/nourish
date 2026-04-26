@@ -1,0 +1,28 @@
+{
+  "github": {
+    "user": "Sunilahluwalia0777-ship-it",
+    "repo": "nourish"
+  },
+  "anthropic": {
+    "key": ""
+  },
+  "instacart": {
+    "key": ""
+  },
+  "servings": 2,
+  "cookTime": 30,
+  "avoids": "",
+  "stores": [
+    "costco",
+    "safeway",
+    "instacart",
+    "indian"
+  ],
+  "users": [
+    {
+      "name": "Sunil",
+      "emoji": "👨",
+      "dietary": "low carb"
+    }
+  ]
+}
