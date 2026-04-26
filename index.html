@@ -133,7 +133,7 @@ document.addEventListener('keydown', e => {
 
 const NUC_API = 'https://nutrition-webhook.sunilahluwalia0777.workers.dev/api';
 
-async function nucCall(method, path, body) {
+async function nucCall(method, path, body, opts) {
   const headers = { 'Content-Type': 'application/json' };
   const token = localStorage.getItem('nourish_browser_token');
   if (token) headers['Authorization'] = 'Bearer ' + token;
@@ -144,6 +144,10 @@ async function nucCall(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   if (res.status === 401) {
+    // Background calls (init paths) pass {silent:true} so a 401 doesn't yank
+    // the user mid-page during a cookie/redirect race. Only user-initiated
+    // actions auto-redirect to /login.
+    if (opts && opts.silent) return null;
     const next = encodeURIComponent(location.href);
     location.href = 'https://nutrition-webhook.sunilahluwalia0777.workers.dev/login?next=' + next;
     throw new Error('Redirecting to sign-in…');
@@ -376,14 +380,14 @@ function showGhSyncStatus(state, msg) {
   }
 }
 
-// Load history list into panel
+// Load history list into panel. Silent on 401 — runs on init from
+// openGithubPanel(), don't redirect mid-flow.
 async function loadGhHistory() {
   const container = document.getElementById('gh-history-list');
   container.textContent = 'Loading…';
   try {
-    const file = await ghGet('data/history.json');
-    if (!file) { container.textContent = 'No history yet — complete your first plan to start.'; return; }
-    const history = JSON.parse(atob(file.content.replace(/\n/g,'')));
+    const history = await nucCall('GET', '/plan/history?limit=52', undefined, {silent: true});
+    if (!history) { container.textContent = 'Sign in to see history.'; return; }
     if (!history.length) { container.textContent = 'No saved weeks yet.'; return; }
     container.innerHTML = history.map(h =>
       `<div class="gh-history-item">
@@ -428,13 +432,12 @@ async function loadWeekFromGithub(weekKey) {
   }
 }
 
-// Load custom meals from GitHub on startup
+// Load custom meals from NUC on startup. Silent on 401 — don't yank the
+// user to /login during page init; the user-initiated paths handle that.
 async function loadCustomMealsFromGithub() {
-  if (!isGhConnected()) return;
   try {
-    const file = await ghGet('data/custom_meals.json');
-    if (!file) return;
-    const customs = JSON.parse(atob(file.content.replace(/\n/g,'')));
+    const customs = await nucCall('GET', '/meals/custom', undefined, {silent: true});
+    if (!customs) return;
     Object.entries(customs).forEach(([type, meals]) => {
       if (!MEALS[type]) MEALS[type] = [];
       meals.forEach(m => {
@@ -3380,7 +3383,7 @@ function showToast(msg) {
 
 const NUC_API = 'https://nutrition-webhook.sunilahluwalia0777.workers.dev/api';
 
-async function nucCall(method, path, body) {
+async function nucCall(method, path, body, opts) {
   const headers = { 'Content-Type': 'application/json' };
   const token = localStorage.getItem('nourish_browser_token');
   if (token) headers['Authorization'] = 'Bearer ' + token;
@@ -3391,6 +3394,10 @@ async function nucCall(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   if (res.status === 401) {
+    // Background calls (init paths) pass {silent:true} so a 401 doesn't yank
+    // the user mid-page during a cookie/redirect race. Only user-initiated
+    // actions auto-redirect to /login.
+    if (opts && opts.silent) return null;
     const next = encodeURIComponent(location.href);
     location.href = 'https://nutrition-webhook.sunilahluwalia0777.workers.dev/login?next=' + next;
     throw new Error('Redirecting to sign-in…');
@@ -3623,14 +3630,14 @@ function showGhSyncStatus(state, msg) {
   }
 }
 
-// Load history list into panel
+// Load history list into panel. Silent on 401 — runs on init from
+// openGithubPanel(), don't redirect mid-flow.
 async function loadGhHistory() {
   const container = document.getElementById('gh-history-list');
   container.textContent = 'Loading…';
   try {
-    const file = await ghGet('data/history.json');
-    if (!file) { container.textContent = 'No history yet — complete your first plan to start.'; return; }
-    const history = JSON.parse(atob(file.content.replace(/\n/g,'')));
+    const history = await nucCall('GET', '/plan/history?limit=52', undefined, {silent: true});
+    if (!history) { container.textContent = 'Sign in to see history.'; return; }
     if (!history.length) { container.textContent = 'No saved weeks yet.'; return; }
     container.innerHTML = history.map(h =>
       `<div class="gh-history-item">
@@ -3675,13 +3682,12 @@ async function loadWeekFromGithub(weekKey) {
   }
 }
 
-// Load custom meals from GitHub on startup
+// Load custom meals from NUC on startup. Silent on 401 — don't yank the
+// user to /login during page init; the user-initiated paths handle that.
 async function loadCustomMealsFromGithub() {
-  if (!isGhConnected()) return;
   try {
-    const file = await ghGet('data/custom_meals.json');
-    if (!file) return;
-    const customs = JSON.parse(atob(file.content.replace(/\n/g,'')));
+    const customs = await nucCall('GET', '/meals/custom', undefined, {silent: true});
+    if (!customs) return;
     Object.entries(customs).forEach(([type, meals]) => {
       if (!MEALS[type]) MEALS[type] = [];
       meals.forEach(m => {
@@ -3712,9 +3718,10 @@ document.addEventListener('click', e => {
 
 // ── Load shared config from NUC ────────────────────────────────────────────
 async function loadSharedConfig() {
-  if (!isGhConnected()) return;
+  // Silent on 401 — never redirects from init.
   try {
-    const cfg = await nucCall('GET', '/config');
+    const cfg = await nucCall('GET', '/config', undefined, {silent: true});
+    if (!cfg) return;
     if (cfg.instacart?.key) localStorage.setItem('ic_key', cfg.instacart.key);
     if (cfg.servings && document.getElementById('servings'))
       document.getElementById('servings').value = cfg.servings;
