@@ -128,76 +128,66 @@ document.addEventListener('keydown', e => {
 
 
 // ══════════════════════════════════════════════════════
-// GITHUB SYNC
+// NUC BACKEND (replaces direct GitHub Contents API after 2026-04-26 cutover)
 // ══════════════════════════════════════════════════════
 
-function getGhConfig() {
-  const cfg = window.NOURISH_CONFIG || {};
-  return {
-    user:  localStorage.getItem('gh_user')  || cfg.githubUser  || '',
-    repo:  localStorage.getItem('gh_repo')  || cfg.githubRepo  || '',
-    token: localStorage.getItem('gh_token') || cfg.githubToken || '',
-  };
+const NUC_API = 'https://nutrition-webhook.sunilahluwalia0777.workers.dev/api';
+
+async function nucCall(method, path, body) {
+  const token = localStorage.getItem('nourish_browser_token');
+  if (!token) throw new Error('No NUC token. Open the ⬡ panel and paste it.');
+  const res = await fetch(NUC_API + path, {
+    method,
+    headers: {
+      'Authorization': 'Bearer ' + token,
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${method} ${path} → ${res.status}: ${text.slice(0, 200)}`);
+  }
+  return res.status === 204 ? null : res.json();
 }
 
-function isGhConnected() {
-  const c = getGhConfig();
-  return c.user && c.repo && c.token;
+function cleanupLegacyKeys() {
+  ['gh_user','gh_repo','gh_token','bootstrap_token',
+   'shop_gh_user','shop_gh_repo','shop_gh_token',
+   'nk',
+  ].forEach(k => localStorage.removeItem(k));
 }
 
-// Load saved settings into panel inputs
+function isGhConnected() { return !!localStorage.getItem('nourish_browser_token'); }
+
 function openGithubPanel() {
   const panel = document.getElementById('gh-panel');
   const isOpen = panel.classList.contains('open');
   panel.classList.toggle('open', !isOpen);
   if (!isOpen) {
-    const c = getGhConfig();
-    document.getElementById('gh-user').value  = c.user;
-    document.getElementById('gh-repo').value  = c.repo;
-    document.getElementById('gh-token').value = c.token;
+    document.getElementById('gh-token').value = localStorage.getItem('nourish_browser_token') || '';
     if (isGhConnected()) loadGhHistory();
   }
 }
 
-function saveGithubSettings() {
-  const user  = document.getElementById('gh-user').value.trim();
-  const repo  = document.getElementById('gh-repo').value.trim();
+async function saveGithubSettings() {
   const token = document.getElementById('gh-token').value.trim();
   const st = document.getElementById('gh-status');
-
-  if (!user || !repo || !token) {
-    st.className = 'gh-status err';
-    st.textContent = 'Please fill in all three fields.';
-    return;
-  }
-
-  localStorage.setItem('gh_user', user);
-  localStorage.setItem('gh_repo', repo);
-  localStorage.setItem('gh_token', token);
-
+  if (!token) { st.className = 'gh-status err'; st.textContent = 'Paste a token first.'; return; }
+  localStorage.setItem('nourish_browser_token', token);
   st.className = 'gh-status ok';
-  st.textContent = '✓ Settings saved. Testing connection…';
-
-  // Test by fetching repo info
-  fetch(`https://api.github.com/repos/${user}/${repo}`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }
-  }).then(r => {
-    if (r.ok) {
-      st.textContent = `✓ Connected to ${user}/${repo}`;
-      updateGhButton(true);
-      loadGhHistory();
-    } else {
-      st.className = 'gh-status err';
-      st.textContent = r.status === 404
-        ? 'Repo not found — check the name.'
-        : r.status === 401
-        ? 'Token rejected — check permissions (needs repo scope).'
-        : `GitHub error ${r.status}`;
-    }
-  }).catch(() => {
+  st.textContent = '✓ Token saved. Testing connection…';
+  try {
+    const cfg = await nucCall('GET', '/config');
+    st.textContent = `✓ Connected · ${Object.keys(cfg).length} config keys loaded`;
+    updateGhButton(true);
+    loadGhHistory();
+  } catch(e) {
     st.className = 'gh-status err';
-    st.textContent = 'Could not reach GitHub — check your connection.';
-  });
+    st.textContent = String(e.message).includes('401')
+      ? 'Token rejected — check it was copied correctly.'
+      : 'Could not reach NUC: ' + e.message;
+  }
 }
 
 function updateGhButton(connected) {
@@ -205,42 +195,75 @@ function updateGhButton(connected) {
   if (connected) {
     btn.style.borderColor = '#2a6a42';
     btn.style.color = '#6AAD7A';
-    btn.textContent = '⬡ GitHub ✓';
+    btn.textContent = '⬡ NUC ✓';
   }
 }
 
-// GitHub API helpers
+// ── ghGet/ghPut compatibility shims ────────────────────────────────────────
+// Keeps existing callsites unchanged. The shims map GitHub paths to NUC
+// endpoints and reshape responses into the legacy {content: base64(json), sha}
+// shape that the rest of the file expects.
 async function ghGet(path) {
-  const {user, repo, token} = getGhConfig();
-  const r = await fetch(`https://api.github.com/repos/${user}/${repo}/contents/${path}`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }
-  });
-  if (r.status === 404) return null;
-  if (!r.ok) throw new Error(`GitHub GET ${r.status}`);
-  return r.json();
+  const wkMatch = path.match(/^data\/week_(\d{4}-\d{2}-\d{2})\.json$/);
+  if (wkMatch) {
+    const data = await nucCall('GET', `/plan/week?week_of=${wkMatch[1]}`);
+    return _ghShim({ weekOf: data.week_of, savedAt: new Date().toISOString(), days: data.days || {} });
+  }
+  if (path === 'data/grocery_current.json') {
+    const data = await nucCall('GET', '/grocery/current');
+    const flat = {};
+    Object.entries(data.groceries || {}).forEach(([cat, list]) => {
+      flat[cat] = list.map(it => typeof it === 'string' ? it : it.item);
+    });
+    return _ghShim({ weekOf: data.weekOf, savedAt: data.savedAt, groceries: flat });
+  }
+  if (path === 'data/custom_meals.json') {
+    return _ghShim(await nucCall('GET', '/meals/custom'));
+  }
+  if (path === 'data/history.json') {
+    return _ghShim(await nucCall('GET', '/plan/history?limit=52'));
+  }
+  console.warn('ghGet: unmapped path', path);
+  return null;
 }
 
-async function ghPut(path, content, message, sha) {
-  const {user, repo, token} = getGhConfig();
-  const body = {
-    message,
-    content: btoa(unescape(encodeURIComponent(JSON.stringify(content, null, 2)))),
-  };
-  if (sha) body.sha = sha;
-  const r = await fetch(`https://api.github.com/repos/${user}/${repo}/contents/${path}`, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  });
-  if (!r.ok) {
-    const err = await r.json();
-    throw new Error(err.message || `GitHub PUT ${r.status}`);
+async function ghPut(path, content, _message, _sha) {
+  const wkMatch = path.match(/^data\/week_(\d{4}-\d{2}-\d{2})\.json$/);
+  if (wkMatch) {
+    return nucCall('PUT', '/plan/week', { week_of: wkMatch[1], days: content.days || {} });
   }
-  return r.json();
+  if (path === 'data/grocery_current.json') {
+    return nucCall('PUT', '/grocery/current', content);
+  }
+  if (path === 'data/custom_meals.json') {
+    for (const [mealType, list] of Object.entries(content || {})) {
+      for (const m of (list || [])) {
+        const body = { ...m, meal_type: mealType };
+        try {
+          await nucCall('POST', '/meals', body);
+        } catch(e) {
+          if (String(e.message).includes('409')) {
+            await nucCall('PUT', '/meals/' + encodeURIComponent(m.id), body);
+          } else { throw e; }
+        }
+      }
+    }
+    return { ok: true };
+  }
+  if (path === 'data/history.json') {
+    // Server maintains history (computed from week_plans). Client write = no-op.
+    return { ok: true, note: 'history is server-maintained' };
+  }
+  console.warn('ghPut: unmapped path', path);
+  return null;
+}
+
+function _ghShim(obj) {
+  const json = JSON.stringify(obj);
+  const bytes = new TextEncoder().encode(json);
+  let bin = '';
+  bytes.forEach(b => bin += String.fromCharCode(b));
+  return { content: btoa(bin), sha: null };
 }
 
 // Serialise the current plan to a plain object
@@ -422,8 +445,9 @@ document.addEventListener('click', e => {
   }
 });
 
-// Init: restore GitHub button state + load remote custom meals
+// Init: legacy cleanup + restore button state + load custom meals from NUC
 (function initGithub() {
+  cleanupLegacyKeys();
   if (isGhConnected()) {
     updateGhButton(true);
     loadCustomMealsFromGithub();
@@ -1813,7 +1837,7 @@ a.src-link-back:hover { background: #303028; color: var(--gold-light); }
     <span id="gh-sync-status" style="font-size:11px;color:#6AAD7A;display:none">✓ Saved to GitHub</span>
     <a href="settings.html" class="hbtn" style="text-decoration:none">⚙ Settings</a>
     <a href="settings.html" class="hbtn" style="text-decoration:none;display:flex;align-items:center">⚙</a>
-    <button class="hbtn" id="gh-btn" onclick="openGithubPanel()" title="GitHub sync settings">⬡ GitHub</button>
+    <button class="hbtn" id="gh-btn" onclick="openGithubPanel()" title="NUC sync settings">⬡ NUC</button>
     <button class="hbtn" onclick="exportToExcel()">↓ Export</button>
     <button class="hbtn" onclick="clearAll()">Clear</button>
     <button class="hbtn primary" onclick="planningComplete()">Done — get grocery list</button>
@@ -1875,22 +1899,15 @@ a.src-link-back:hover { background: #303028; color: var(--gold-light); }
 
 <!-- Big Card Flip Overlay -->
 
-<!-- GitHub Panel -->
+<!-- NUC Panel (replaces GitHub sync after 2026-04-26 cutover) -->
 <div class="gh-panel" id="gh-panel">
-  <div class="gh-panel-title">GitHub sync</div>
-  <div class="gh-panel-sub">Your plans save automatically to your repo after each "Planning complete"</div>
+  <div class="gh-panel-title">Nutrition backend</div>
+  <div class="gh-panel-sub">Your plans save automatically to the NUC after each "Planning complete"</div>
 
   <div class="gh-field">
-    <label>GitHub username</label>
-    <input type="text" id="gh-user" placeholder="yourusername" autocomplete="off">
-  </div>
-  <div class="gh-field">
-    <label>Repository name</label>
-    <input type="text" id="gh-repo" placeholder="nourish" autocomplete="off">
-  </div>
-  <div class="gh-field">
-    <label>Personal access token <a href="https://github.com/settings/tokens/new?scopes=repo&description=Nourish+App" target="_blank" class="gh-link">(create one →)</a></label>
-    <input type="password" id="gh-token" placeholder="ghp_…" autocomplete="off">
+    <label>Browser API token</label>
+    <input type="password" id="gh-token" placeholder="paste your token…" autocomplete="off">
+    <div style="font-size:11px;color:var(--text3);margin-top:4px">Stored in this browser. Get it from your password manager (entry: <code>nourish/browser_token</code>).</div>
   </div>
 
   <button class="gh-save-btn" onclick="saveGithubSettings()">Save &amp; connect</button>
@@ -2796,46 +2813,41 @@ function confirmPantryAndGenerate() {
 
 // Step 1: validate then open pantry check
 function planningComplete() {
-  const key = getKey();
-  if (!key || !key.startsWith('sk-')) { alert('Please enter your Anthropic API key first.'); return; }
+  if (!isGhConnected()) { alert('No NUC token. Open the ⬡ panel and paste it.'); return; }
   const hasMeals = DAYS.some((_,di) => MEAL_TYPES.some(t => {
     const m = plan[di][t];
     return m && m.id !== '__none__' && m.id !== '__eatout__';
   }));
   if (!hasMeals) { alert('Add some meals first.'); return; }
-  // Open pantry check before generating
   openPantryCheck();
 }
 
-// Step 2: generate grocery list with pantry exclusions
+// Step 2: generate grocery list with pantry exclusions — calls NUC's
+// /claude/grocery-list proxy (Anthropic key now lives server-side).
 async function generateGroceryList(haveItems) {
-  const key = getKey();
   const summary = [];
   DAYS.forEach((day,di) => MEAL_TYPES.forEach(t => {
     const m = plan[di][t];
-    if (m && m.id !== '__none__' && m.id !== '__eatout__') summary.push({day,t,name:m.name,ingredients:m.ingredients||[]});
+    if (m && m.id !== '__none__' && m.id !== '__eatout__') {
+      summary.push({day, t, name: m.name, ingredients: m.ingredients || []});
+    }
   }));
 
   document.getElementById('gen-overlay').classList.add('active');
 
-  const mealsText = summary.map(m=>`${m.day} ${m.t}: ${m.name}\n  ${m.ingredients.join(', ')}`).join('\n');
-  const pantryNote = haveItems.length
-    ? `\n\nPANTRY — user already has these, DO NOT include in the grocery list:\n${haveItems.map(i=>'- '+i).join('\n')}`
-    : '';
-
-  const prompt = `Generate a consolidated grocery list from this weekly meal plan. Assume 2 servings per meal.\n\nMEAL PLAN:\n${mealsText}${pantryNote}\n\nRules: combine duplicates, group into: Produce, Proteins, Dairy & Eggs, Grains & Pantry, Condiments & Spices, Frozen & Other. Format: "Item (quantity)". Skip salt/water basics. Skip anything the user already has in their pantry.\n\nReturn ONLY valid JSON: {"Produce":[...],"Proteins":[...],"Dairy & Eggs":[...],"Grains & Pantry":[...],"Condiments & Spices":[...],"Frozen & Other":[...]}`;
-
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,messages:[{role:'user',content:prompt}]})});
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data?.error?.message||`API ${resp.status}`);
-    const raw = data.content.map(c=>c.text||'').join('').replace(/^```[\w]*\n?/,'').replace(/\n?```$/,'').trim();
-    const groceries = JSON.parse(raw);
+    const groceries = await nucCall('POST', '/claude/grocery-list', {
+      meal_plan: summary,
+      pantry_excludes: haveItems,
+    });
     window._lastGroceries = groceries;
     renderGroceries(groceries);
     saveToGithub();
-  } catch(e) { alert(`Error: ${e.message}`); }
-  finally { document.getElementById('gen-overlay').classList.remove('active'); }
+  } catch(e) {
+    alert('Error generating grocery list: ' + e.message);
+  } finally {
+    document.getElementById('gen-overlay').classList.remove('active');
+  }
 }
 
 
@@ -3400,76 +3412,66 @@ function showToast(msg) {
 
 
 // ══════════════════════════════════════════════════════
-// GITHUB SYNC
+// NUC BACKEND (replaces direct GitHub Contents API after 2026-04-26 cutover)
 // ══════════════════════════════════════════════════════
 
-function getGhConfig() {
-  const cfg = window.NOURISH_CONFIG || {};
-  return {
-    user:  localStorage.getItem('gh_user')  || cfg.githubUser  || '',
-    repo:  localStorage.getItem('gh_repo')  || cfg.githubRepo  || '',
-    token: localStorage.getItem('gh_token') || cfg.githubToken || '',
-  };
+const NUC_API = 'https://nutrition-webhook.sunilahluwalia0777.workers.dev/api';
+
+async function nucCall(method, path, body) {
+  const token = localStorage.getItem('nourish_browser_token');
+  if (!token) throw new Error('No NUC token. Open the ⬡ panel and paste it.');
+  const res = await fetch(NUC_API + path, {
+    method,
+    headers: {
+      'Authorization': 'Bearer ' + token,
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${method} ${path} → ${res.status}: ${text.slice(0, 200)}`);
+  }
+  return res.status === 204 ? null : res.json();
 }
 
-function isGhConnected() {
-  const c = getGhConfig();
-  return c.user && c.repo && c.token;
+function cleanupLegacyKeys() {
+  ['gh_user','gh_repo','gh_token','bootstrap_token',
+   'shop_gh_user','shop_gh_repo','shop_gh_token',
+   'nk',
+  ].forEach(k => localStorage.removeItem(k));
 }
 
-// Load saved settings into panel inputs
+function isGhConnected() { return !!localStorage.getItem('nourish_browser_token'); }
+
 function openGithubPanel() {
   const panel = document.getElementById('gh-panel');
   const isOpen = panel.classList.contains('open');
   panel.classList.toggle('open', !isOpen);
   if (!isOpen) {
-    const c = getGhConfig();
-    document.getElementById('gh-user').value  = c.user;
-    document.getElementById('gh-repo').value  = c.repo;
-    document.getElementById('gh-token').value = c.token;
+    document.getElementById('gh-token').value = localStorage.getItem('nourish_browser_token') || '';
     if (isGhConnected()) loadGhHistory();
   }
 }
 
-function saveGithubSettings() {
-  const user  = document.getElementById('gh-user').value.trim();
-  const repo  = document.getElementById('gh-repo').value.trim();
+async function saveGithubSettings() {
   const token = document.getElementById('gh-token').value.trim();
   const st = document.getElementById('gh-status');
-
-  if (!user || !repo || !token) {
-    st.className = 'gh-status err';
-    st.textContent = 'Please fill in all three fields.';
-    return;
-  }
-
-  localStorage.setItem('gh_user', user);
-  localStorage.setItem('gh_repo', repo);
-  localStorage.setItem('gh_token', token);
-
+  if (!token) { st.className = 'gh-status err'; st.textContent = 'Paste a token first.'; return; }
+  localStorage.setItem('nourish_browser_token', token);
   st.className = 'gh-status ok';
-  st.textContent = '✓ Settings saved. Testing connection…';
-
-  // Test by fetching repo info
-  fetch(`https://api.github.com/repos/${user}/${repo}`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }
-  }).then(r => {
-    if (r.ok) {
-      st.textContent = `✓ Connected to ${user}/${repo}`;
-      updateGhButton(true);
-      loadGhHistory();
-    } else {
-      st.className = 'gh-status err';
-      st.textContent = r.status === 404
-        ? 'Repo not found — check the name.'
-        : r.status === 401
-        ? 'Token rejected — check permissions (needs repo scope).'
-        : `GitHub error ${r.status}`;
-    }
-  }).catch(() => {
+  st.textContent = '✓ Token saved. Testing connection…';
+  try {
+    const cfg = await nucCall('GET', '/config');
+    st.textContent = `✓ Connected · ${Object.keys(cfg).length} config keys loaded`;
+    updateGhButton(true);
+    loadGhHistory();
+  } catch(e) {
     st.className = 'gh-status err';
-    st.textContent = 'Could not reach GitHub — check your connection.';
-  });
+    st.textContent = String(e.message).includes('401')
+      ? 'Token rejected — check it was copied correctly.'
+      : 'Could not reach NUC: ' + e.message;
+  }
 }
 
 function updateGhButton(connected) {
@@ -3477,42 +3479,75 @@ function updateGhButton(connected) {
   if (connected) {
     btn.style.borderColor = '#2a6a42';
     btn.style.color = '#6AAD7A';
-    btn.textContent = '⬡ GitHub ✓';
+    btn.textContent = '⬡ NUC ✓';
   }
 }
 
-// GitHub API helpers
+// ── ghGet/ghPut compatibility shims ────────────────────────────────────────
+// Keeps existing callsites unchanged. The shims map GitHub paths to NUC
+// endpoints and reshape responses into the legacy {content: base64(json), sha}
+// shape that the rest of the file expects.
 async function ghGet(path) {
-  const {user, repo, token} = getGhConfig();
-  const r = await fetch(`https://api.github.com/repos/${user}/${repo}/contents/${path}`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }
-  });
-  if (r.status === 404) return null;
-  if (!r.ok) throw new Error(`GitHub GET ${r.status}`);
-  return r.json();
+  const wkMatch = path.match(/^data\/week_(\d{4}-\d{2}-\d{2})\.json$/);
+  if (wkMatch) {
+    const data = await nucCall('GET', `/plan/week?week_of=${wkMatch[1]}`);
+    return _ghShim({ weekOf: data.week_of, savedAt: new Date().toISOString(), days: data.days || {} });
+  }
+  if (path === 'data/grocery_current.json') {
+    const data = await nucCall('GET', '/grocery/current');
+    const flat = {};
+    Object.entries(data.groceries || {}).forEach(([cat, list]) => {
+      flat[cat] = list.map(it => typeof it === 'string' ? it : it.item);
+    });
+    return _ghShim({ weekOf: data.weekOf, savedAt: data.savedAt, groceries: flat });
+  }
+  if (path === 'data/custom_meals.json') {
+    return _ghShim(await nucCall('GET', '/meals/custom'));
+  }
+  if (path === 'data/history.json') {
+    return _ghShim(await nucCall('GET', '/plan/history?limit=52'));
+  }
+  console.warn('ghGet: unmapped path', path);
+  return null;
 }
 
-async function ghPut(path, content, message, sha) {
-  const {user, repo, token} = getGhConfig();
-  const body = {
-    message,
-    content: btoa(unescape(encodeURIComponent(JSON.stringify(content, null, 2)))),
-  };
-  if (sha) body.sha = sha;
-  const r = await fetch(`https://api.github.com/repos/${user}/${repo}/contents/${path}`, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  });
-  if (!r.ok) {
-    const err = await r.json();
-    throw new Error(err.message || `GitHub PUT ${r.status}`);
+async function ghPut(path, content, _message, _sha) {
+  const wkMatch = path.match(/^data\/week_(\d{4}-\d{2}-\d{2})\.json$/);
+  if (wkMatch) {
+    return nucCall('PUT', '/plan/week', { week_of: wkMatch[1], days: content.days || {} });
   }
-  return r.json();
+  if (path === 'data/grocery_current.json') {
+    return nucCall('PUT', '/grocery/current', content);
+  }
+  if (path === 'data/custom_meals.json') {
+    for (const [mealType, list] of Object.entries(content || {})) {
+      for (const m of (list || [])) {
+        const body = { ...m, meal_type: mealType };
+        try {
+          await nucCall('POST', '/meals', body);
+        } catch(e) {
+          if (String(e.message).includes('409')) {
+            await nucCall('PUT', '/meals/' + encodeURIComponent(m.id), body);
+          } else { throw e; }
+        }
+      }
+    }
+    return { ok: true };
+  }
+  if (path === 'data/history.json') {
+    // Server maintains history (computed from week_plans). Client write = no-op.
+    return { ok: true, note: 'history is server-maintained' };
+  }
+  console.warn('ghPut: unmapped path', path);
+  return null;
+}
+
+function _ghShim(obj) {
+  const json = JSON.stringify(obj);
+  const bytes = new TextEncoder().encode(json);
+  let bin = '';
+  bytes.forEach(b => bin += String.fromCharCode(b));
+  return { content: btoa(bin), sha: null };
 }
 
 // Serialise the current plan to a plain object
@@ -3694,8 +3729,9 @@ document.addEventListener('click', e => {
   }
 });
 
-// Init: restore GitHub button state + load remote custom meals
+// Init: legacy cleanup + restore button state + load custom meals from NUC
 (function initGithub() {
+  cleanupLegacyKeys();
   if (isGhConnected()) {
     updateGhButton(true);
     loadCustomMealsFromGithub();
@@ -3703,32 +3739,18 @@ document.addEventListener('click', e => {
 })();
 
 
-// ── Load config.json from GitHub (written by settings.html) ────────────────
+// ── Load shared config from NUC ────────────────────────────────────────────
 async function loadSharedConfig() {
-  const user  = localStorage.getItem('gh_user')  || localStorage.getItem('shop_gh_user')  || '';
-  const repo  = localStorage.getItem('gh_repo')  || localStorage.getItem('shop_gh_repo')  || '';
-  const token = localStorage.getItem('gh_token') || localStorage.getItem('shop_gh_token') ||
-                localStorage.getItem('bootstrap_token') || '';
-  if (!user || !repo || !token) return;
+  if (!isGhConnected()) return;
   try {
-    const r = await fetch(
-      `https://api.github.com/repos/${user}/${repo}/contents/data/config.json`,
-      { headers: { Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json' } }
-    );
-    if (!r.ok) return;
-    const file = await r.json();
-    const cfg = JSON.parse(atob(file.content.replace(/\n/g,'')));
-    if (cfg.anthropic?.key)  localStorage.setItem('nk',       cfg.anthropic.key);
-    if (cfg.instacart?.key)  localStorage.setItem('ic_key',   cfg.instacart.key);
-    if (cfg.github?.user)    localStorage.setItem('gh_user',  cfg.github.user);
-    if (cfg.github?.repo)    localStorage.setItem('gh_repo',  cfg.github.repo);
+    const cfg = await nucCall('GET', '/config');
+    if (cfg.instacart?.key) localStorage.setItem('ic_key', cfg.instacart.key);
     if (cfg.servings && document.getElementById('servings'))
       document.getElementById('servings').value = cfg.servings;
     if (cfg.cookTime && document.getElementById('cook-time'))
       document.getElementById('cook-time').value = cfg.cookTime;
     if (cfg.avoids && document.getElementById('avoids'))
       document.getElementById('avoids').value = cfg.avoids;
-    console.log('Config loaded from GitHub');
   } catch(e) { console.log('Config load skipped:', e.message); }
 }
 loadSharedConfig();

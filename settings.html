@@ -159,55 +159,25 @@ header {
 
   <div class="status-banner" id="status-banner"></div>
 
-  <!-- GitHub -->
+  <!-- NUC backend (replaces GitHub after 2026-04-26 cutover) -->
   <div class="section">
     <div class="section-header">
-      <div class="section-icon">⬡</div>
+      <div class="section-icon">🧠</div>
       <div>
-        <div class="section-title">GitHub <span class="conn-dot" id="gh-dot"></span><span id="gh-conn-label" style="font-size:12px;color:var(--text3)">not connected</span></div>
-        <div class="section-sub">Stores your plans, grocery lists and config</div>
+        <div class="section-title">Nutrition backend <span class="conn-dot" id="gh-dot"></span><span id="gh-conn-label" style="font-size:12px;color:var(--text3)">not connected</span></div>
+        <div class="section-sub">All apps read &amp; write here. SQLite source-of-truth on the NUC.</div>
       </div>
     </div>
     <div class="section-body">
-      <div class="field-row">
-        <div class="field">
-          <label>Username</label>
-          <input id="gh-user" type="text" placeholder="your-github-username" autocomplete="off">
-        </div>
-        <div class="field">
-          <label>Repository</label>
-          <input id="gh-repo" type="text" placeholder="nourish" autocomplete="off">
-        </div>
-      </div>
       <div class="field">
-        <label>Personal Access Token <a href="https://github.com/settings/tokens/new?scopes=repo&description=Nourish+App" target="_blank" style="color:var(--green);font-size:11px;text-decoration:none;margin-left:6px;font-weight:400">Create new →</a></label>
+        <label>Browser API token</label>
         <div class="token-wrap">
-          <input id="gh-token" type="password" placeholder="ghp_…" autocomplete="off">
+          <input id="gh-token" type="password" placeholder="paste your token…" autocomplete="off">
           <button class="token-toggle" onclick="toggleToken()">Show</button>
         </div>
-        <div class="hint">Needs <strong>repo</strong> scope. Stored in your browser's localStorage — never sent anywhere except GitHub.</div>
+        <div class="hint">Stored in this browser's localStorage. Get it from your password manager (entry: <code>nourish/browser_token</code>).</div>
       </div>
       <button onclick="testGitHub()" style="background:var(--green-pale);border:1px solid rgba(0,166,80,.3);color:var(--green);font-family:var(--sans);font-size:13px;font-weight:700;padding:9px 18px;border-radius:9px;cursor:pointer;width:fit-content">Test connection</button>
-    </div>
-  </div>
-
-  <!-- Anthropic -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-icon">🤖</div>
-      <div>
-        <div class="section-title">Anthropic API</div>
-        <div class="section-sub">Powers grocery list generation</div>
-      </div>
-    </div>
-    <div class="section-body">
-      <div class="field">
-        <label>API Key <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--green);font-size:11px;text-decoration:none;margin-left:6px;font-weight:400">Get key →</a></label>
-        <div class="token-wrap">
-          <input id="ant-key" type="password" placeholder="sk-ant-api03-…" autocomplete="off">
-          <button class="token-toggle" onclick="toggleAnt()">Show</button>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -301,16 +271,37 @@ header {
 </div>
 
 <script>
-// ── BOOTSTRAP TOKEN ────────────────────────────────────────────────────────
-// This token is used ONLY to read/write data/config.json in your repo.
-// It is the one credential that needs to be here — everything else is stored
-// in config.json and read by all apps dynamically.
-//
-// To set it: open browser console on this page and run:
-//   localStorage.setItem('bootstrap_token', 'ghp_yourtoken')
-// Or enter it manually in the GitHub section below.
-//
-const BOOTSTRAP_TOKEN = localStorage.getItem('bootstrap_token') || '';
+// ── NUC BACKEND ────────────────────────────────────────────────────────────
+// As of 2026-04-26 cutover, settings live in SQLite on the NUC.
+// All requests go through the nutrition-webhook Cloudflare Worker.
+const NUC_API = 'https://nutrition-webhook.sunilahluwalia0777.workers.dev/api';
+
+async function nucCall(method, path, body) {
+  const token = localStorage.getItem('nourish_browser_token');
+  if (!token) throw new Error('No NUC token. Paste yours in the field above.');
+  const res = await fetch(NUC_API + path, {
+    method,
+    headers: {
+      'Authorization': 'Bearer ' + token,
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${method} ${path} → ${res.status}: ${text.slice(0, 200)}`);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+// One-shot cleanup of legacy localStorage keys from the GitHub-era apps.
+// Runs once per browser; idempotent (no-op if keys are already gone).
+function cleanupLegacyKeys() {
+  ['gh_user','gh_repo','gh_token','bootstrap_token',
+   'shop_gh_user','shop_gh_repo','shop_gh_token',
+   'nk' /* old Anthropic key — moved server-side */,
+  ].forEach(k => localStorage.removeItem(k));
+}
 
 const ALL_STORES = [
   { id:'costco',    label:'Costco',       icon:'🏪' },
@@ -324,9 +315,6 @@ const ALL_STORES = [
 const EMOJIS = ['👨','👩','👦','👧','👴','👵','🧑'];
 
 let config = {
-  github: { user:'', repo:'', token:'' },
-  anthropic: { key:'' },
-  instacart: { key:'' },
   servings: 2,
   cookTime: 30,
   avoids: '',
@@ -339,191 +327,83 @@ let config = {
   buildStoresGrid();
   buildUsersList();
 
-  // Try to load config from GitHub first
-  const token = BOOTSTRAP_TOKEN || localStorage.getItem('gh_token') || '';
-  const user  = localStorage.getItem('gh_user') || '';
-  const repo  = localStorage.getItem('gh_repo') || '';
+  // One-shot legacy cleanup
+  cleanupLegacyKeys();
 
-  if (token && user && repo) {
-    await loadConfigFromGithub(user, repo, token);
-  } else {
-    // Load from localStorage fallback
-    loadFromLocalStorage();
+  // If no token yet, leave the form empty so the user can paste it.
+  // If token present, try to load config from NUC; on failure, keep defaults.
+  const token = localStorage.getItem('nourish_browser_token') || '';
+  if (token) {
+    try {
+      const loaded = await nucCall('GET', '/config');
+      config = { ...config, ...loaded };
+      setGhStatus(true, 'Connected · NUC');
+    } catch(e) {
+      setGhStatus(false, 'NUC unreachable — defaults shown');
+      console.error(e);
+    }
   }
   populateForm();
 })();
 
-// ── GITHUB ─────────────────────────────────────────────────────────────────
-async function loadConfigFromGithub(user, repo, token) {
-  try {
-    const r = await fetch(
-      `https://api.github.com/repos/${user}/${repo}/contents/data/config.json`,
-      { headers: { Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json' } }
-    );
-    if (r.ok) {
-      const file = await r.json();
-      const loaded = JSON.parse(atob(file.content.replace(/\n/g,'')));
-      config = { ...config, ...loaded };
-      // Always use the token that worked
-      config.github.token = token;
-      config.github.user  = user;
-      config.github.repo  = repo;
-      setGhStatus(true, `Connected to ${user}/${repo}`);
-    }
-  } catch(e) { /* silently fall back to localStorage */ }
-}
-
-function loadFromLocalStorage() {
-  const t = BOOTSTRAP_TOKEN || localStorage.getItem('gh_token') || '';
-  config.github.token = t;
-  config.github.user  = localStorage.getItem('gh_user') || '';
-  config.github.repo  = localStorage.getItem('gh_repo') || 'nourish';
-  config.anthropic.key = localStorage.getItem('nk') || '';
-  config.instacart.key = localStorage.getItem('ic_key') || '';
-}
-
+// ── TEST CONNECTION ────────────────────────────────────────────────────────
 async function testGitHub() {
-  const user  = document.getElementById('gh-user').value.trim();
-  const repo  = document.getElementById('gh-repo').value.trim();
   const token = document.getElementById('gh-token').value.trim();
-  if (!user || !repo || !token) { showStatus('err','Fill in all three GitHub fields first'); return; }
+  if (!token) { showStatus('err','Paste your browser token first'); return; }
+  // Save the token first (so nucCall picks it up)
+  localStorage.setItem('nourish_browser_token', token);
   showStatus('loading','Testing connection…');
   try {
-    const r = await fetch(`https://api.github.com/repos/${user}/${repo}`,
-      { headers:{ Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json' } });
-    if (r.ok) {
-      const data = await r.json();
-      setGhStatus(true, `Connected · ${data.full_name}`);
-      showStatus('ok',`✓ Connected to ${data.full_name}`);
-      // Save bootstrap token so we can load config next time
-      localStorage.setItem('bootstrap_token', token);
-      localStorage.setItem('gh_user', user);
-      localStorage.setItem('gh_repo', repo);
-      localStorage.setItem('gh_token', token);
-    } else {
-      const status = r.status;
-      setGhStatus(false,'');
-      if (status===401) showStatus('err','❌ Token invalid — check it was copied correctly');
-      else if (status===404) showStatus('err','❌ Repo not found — check username and repo name');
-      else showStatus('err',`❌ GitHub error ${status}`);
-    }
-  } catch(e) { showStatus('err','❌ Network error: ' + e.message); }
-}
-
-async function saveConfigToGithub(cfg) {
-  const {user, repo, token} = cfg.github;
-  if (!user || !repo || !token) return {ok:false, err:'Missing GitHub credentials'};
-
-  // Strip ALL API keys — they stay in localStorage only, never in GitHub
-  const safeConfig = JSON.parse(JSON.stringify(cfg));
-  delete safeConfig.github.token;
-  if (safeConfig.anthropic) safeConfig.anthropic.key = '';
-  if (safeConfig.instacart) safeConfig.instacart.key = '';
-
-  // Robust base64 encoding that handles all unicode characters
-  const toBase64 = (str) => {
-    const bytes = new TextEncoder().encode(str);
-    let binary = '';
-    bytes.forEach(b => binary += String.fromCharCode(b));
-    return btoa(binary);
-  };
-
-  const path = 'data/config.json';
-  const headers = { Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json', 'Content-Type':'application/json' };
-  const apiUrl = `https://api.github.com/repos/${user}/${repo}/contents/${path}`;
-
-  // Get existing SHA (needed to update an existing file)
-  let sha = undefined;
-  try {
-    const getResp = await fetch(apiUrl, { headers });
-    if (getResp.ok) {
-      const existing = await getResp.json();
-      sha = existing.sha;
-      console.log('Existing config.json found, SHA:', sha);
-    } else if (getResp.status === 404) {
-      console.log('config.json does not exist yet — will create');
-    } else {
-      const errData = await getResp.json();
-      return {ok:false, err:`GET failed ${getResp.status}: ${errData.message}`};
-    }
+    const cfg = await nucCall('GET', '/config');
+    setGhStatus(true, 'Connected · NUC');
+    showStatus('ok', `✓ Connected · ${Object.keys(cfg).length} config keys loaded`);
   } catch(e) {
-    return {ok:false, err:'Network error checking file: ' + e.message};
-  }
-
-  const body = {
-    message: 'Nourish: update config',
-    content: toBase64(JSON.stringify(safeConfig, null, 2)),
-  };
-  if (sha) body.sha = sha;
-
-  try {
-    const putResp = await fetch(apiUrl, { method:'PUT', headers, body: JSON.stringify(body) });
-    const putData = await putResp.json();
-    if (putResp.ok) {
-      console.log('config.json saved successfully');
-      return {ok:true};
-    } else {
-      console.error('PUT failed:', putData);
-      return {ok:false, err:`${putResp.status}: ${putData.message}`};
-    }
-  } catch(e) {
-    return {ok:false, err:'Network error saving: ' + e.message};
+    setGhStatus(false, '');
+    if (String(e.message).includes('401')) showStatus('err','❌ Token rejected — check it was copied correctly');
+    else showStatus('err', '❌ ' + e.message);
   }
 }
 
 // ── FORM ───────────────────────────────────────────────────────────────────
 function populateForm() {
-  document.getElementById('gh-user').value    = config.github?.user  || '';
-  document.getElementById('gh-repo').value    = config.github?.repo  || 'nourish';
-  document.getElementById('gh-token').value   = config.github?.token || BOOTSTRAP_TOKEN || localStorage.getItem('gh_token') || '';
-  // Keys come from localStorage (never stored in config.json on GitHub)
-  document.getElementById('ant-key').value    = localStorage.getItem('nk') || '';
-  document.getElementById('ic-key').value     = localStorage.getItem('ic_key') || '';
-  document.getElementById('servings').value   = config.servings || 2;
-  document.getElementById('cook-time').value  = config.cookTime || 30;
-  document.getElementById('avoids').value     = config.avoids || '';
+  document.getElementById('gh-token').value = localStorage.getItem('nourish_browser_token') || '';
+  document.getElementById('ic-key').value   = localStorage.getItem('ic_key') || '';
+  document.getElementById('servings').value = config.servings || 2;
+  document.getElementById('cook-time').value= config.cookTime || 30;
+  document.getElementById('avoids').value   = config.avoids || '';
   buildStoresGrid(config.stores || ['costco','safeway','instacart','indian']);
   buildUsersList(config.users || []);
-  if (config.github?.user) setGhStatus(true, `${config.github.user}/${config.github.repo}`);
+  if (localStorage.getItem('nourish_browser_token')) setGhStatus(true, 'Connected · NUC');
 }
 
 async function saveAll() {
   const btn = document.getElementById('save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
 
-  config.github.user  = document.getElementById('gh-user').value.trim();
-  config.github.repo  = document.getElementById('gh-repo').value.trim();
-  config.github.token = document.getElementById('gh-token').value.trim();
-  config.anthropic.key = document.getElementById('ant-key').value.trim();
-  config.instacart.key = document.getElementById('ic-key').value.trim();
-  config.servings  = parseInt(document.getElementById('servings').value);
-  config.cookTime  = parseInt(document.getElementById('cook-time').value);
-  config.avoids    = document.getElementById('avoids').value.trim();
-  config.stores    = Array.from(document.querySelectorAll('.store-chip.active')).map(c => c.dataset.store);
-  config.users     = readUsers();
+  // Browser token → localStorage only (server doesn't need it back)
+  const token = document.getElementById('gh-token').value.trim();
+  if (token) localStorage.setItem('nourish_browser_token', token);
 
-  // Keys ONLY go to localStorage — never to GitHub (secret scanning blocks them)
-  localStorage.setItem('bootstrap_token', config.github.token);
-  localStorage.setItem('gh_user',  config.github.user);
-  localStorage.setItem('gh_repo',  config.github.repo);
-  localStorage.setItem('gh_token', config.github.token);
-  localStorage.setItem('nk',       config.anthropic.key);
-  localStorage.setItem('ic_key',   config.instacart.key);
-  // Also mirror under shop_ keys so grocery app picks them up
-  localStorage.setItem('shop_gh_user',  config.github.user);
-  localStorage.setItem('shop_gh_repo',  config.github.repo);
-  localStorage.setItem('shop_gh_token', config.github.token);
+  // Instacart key → localStorage only (still client-side; proxy deferred)
+  localStorage.setItem('ic_key', document.getElementById('ic-key').value.trim());
 
-  // Save config.json to GitHub (without token)
-  const result = await saveConfigToGithub(config);
+  // Build the config payload (no secrets — server filters them anyway)
+  const payload = {
+    servings: parseInt(document.getElementById('servings').value),
+    cookTime: parseInt(document.getElementById('cook-time').value),
+    avoids:   document.getElementById('avoids').value.trim(),
+    stores:   Array.from(document.querySelectorAll('.store-chip.active')).map(c => c.dataset.store),
+    users:    readUsers(),
+  };
 
-  btn.disabled = false; btn.textContent = 'Save all settings';
-  if (result.ok) {
-    showStatus('ok', '✓ Preferences saved to GitHub · API keys saved to this browser');
-  } else if (!config.github.token) {
-    showStatus('err', 'GitHub not connected — settings saved to this browser only');
-  } else {
-    showStatus('err', `❌ Could not save to GitHub: ${result.err || 'unknown error'}`);
+  try {
+    await nucCall('PUT', '/config', payload);
+    config = { ...config, ...payload };
+    btn.disabled = false; btn.textContent = 'Save all settings';
+    showStatus('ok', '✓ Saved to NUC');
+  } catch(e) {
+    btn.disabled = false; btn.textContent = 'Save all settings';
+    showStatus('err', '❌ ' + e.message);
   }
 }
 
@@ -596,12 +476,6 @@ function showStatus(type, msg) {
 }
 function toggleToken() {
   const inp = document.getElementById('gh-token');
-  const btn = inp.nextElementSibling;
-  inp.type = inp.type==='password' ? 'text' : 'password';
-  btn.textContent = inp.type==='password' ? 'Show' : 'Hide';
-}
-function toggleAnt() {
-  const inp = document.getElementById('ant-key');
   const btn = inp.nextElementSibling;
   inp.type = inp.type==='password' ? 'text' : 'password';
   btn.textContent = inp.type==='password' ? 'Show' : 'Hide';

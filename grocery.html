@@ -467,26 +467,49 @@ body {
 <div class="sheet-overlay" id="settings-overlay" onclick="handleSheetClick(event)">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <h2>Connect to Nourish</h2>
+    <h2>Connect to Nutrition backend</h2>
     <div class="sheet-field">
-      <label>GitHub Username</label>
-      <input id="s-user" type="text" placeholder="sunilahluwalia0777-ship-it" autocomplete="off">
+      <label>Browser API token</label>
+      <input id="s-token" type="password" placeholder="paste your token…" autocomplete="off">
+      <div style="font-size:11px;color:#888;margin-top:4px">Get it from your password manager (entry: <code>nourish/browser_token</code>)</div>
     </div>
-    <div class="sheet-field">
-      <label>Repository Name</label>
-      <input id="s-repo" type="text" placeholder="nourish" autocomplete="off">
-    </div>
-    <div class="sheet-field">
-      <label>Personal Access Token</label>
-      <input id="s-token" type="password" placeholder="ghp_…" autocomplete="off">
-    </div>
-    <button class="sheet-save" onclick="saveSettings()">Save & connect</button>
+    <button class="sheet-save" onclick="saveSettings()">Save &amp; connect</button>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
+// ═══════════════════════════════════════════
+// NUC BACKEND (replaces GitHub after 2026-04-26 cutover)
+// ═══════════════════════════════════════════
+const NUC_API = 'https://nutrition-webhook.sunilahluwalia0777.workers.dev/api';
+
+async function nucCall(method, path, body) {
+  const token = localStorage.getItem('nourish_browser_token');
+  if (!token) throw new Error('No NUC token. Open ⚙ settings.');
+  const res = await fetch(NUC_API + path, {
+    method,
+    headers: {
+      'Authorization': 'Bearer ' + token,
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${method} ${path} → ${res.status}: ${text.slice(0, 200)}`);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+function cleanupLegacyKeys() {
+  ['gh_user','gh_repo','gh_token','bootstrap_token',
+   'shop_gh_user','shop_gh_repo','shop_gh_token',
+   'nk',
+  ].forEach(k => localStorage.removeItem(k));
+}
+
 // ═══════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════
@@ -527,21 +550,13 @@ const STORE_RULES = {
 
 let items = []; // [{id, name, qty, store, checked, category}]
 let activeTab = 'all';
-let ghConfig = {};
 let gCounter = 0;
 
 // ═══════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════
 (function init() {
-  // Load settings
-  // Load GitHub config — check shop-specific keys first, fall back to Nourish keys
-  const pickKey = (...keys) => keys.map(k => localStorage.getItem(k)).find(v => v && v.length > 0) || '';
-  ghConfig = {
-    user:  pickKey('shop_gh_user',  'gh_user'),
-    repo:  pickKey('shop_gh_repo',  'gh_repo'),
-    token: pickKey('shop_gh_token', 'gh_token'),
-  };
+  cleanupLegacyKeys();
 
   // Load saved list
   const saved = localStorage.getItem('shop_items');
@@ -729,7 +744,9 @@ function renderItem(item) {
 // INTERACTIONS
 // ═══════════════════════════════════════════
 function toggleCheck(id) {
-  const item = items.find(i => i.id === id);
+  // id may be a string (manual add) or number (server-assigned). String IDs
+  // skip the server PATCH since they're not in the DB.
+  const item = items.find(i => i.id == id);  // == handles number/string
   if (!item) return;
   item.checked = !item.checked;
   const el = document.getElementById("gi-" + id);
@@ -738,7 +755,6 @@ function toggleCheck(id) {
     el.querySelector(".check-circle").textContent = item.checked ? "✓" : "";
     const qtyInput = el.querySelector(".item-qty-input");
     if (qtyInput) qtyInput.disabled = item.checked;
-    // Move to bottom of tbody when checked
     const tbody = el.parentElement;
     if (item.checked) tbody.appendChild(el);
     else tbody.prepend(el);
@@ -746,19 +762,27 @@ function toggleCheck(id) {
   updateCounts();
   updateProgress();
   saveLocal();
+  // Push status to server (numeric IDs only)
+  if (typeof item.id === 'number') {
+    nucCall('PATCH', '/grocery/items/' + item.id, {status: item.checked ? 'bought' : 'pending'})
+      .catch(e => console.warn('PATCH status failed:', e.message));
+  }
 }
 
 function cycleStore(id) {
-  const item = items.find(i => i.id === id);
+  const item = items.find(i => i.id == id);
   if (!item) return;
   const idx = STORES.indexOf(item.store);
   item.store = STORES[(idx+1) % STORES.length];
-  // Update store pill in place without full re-render
   const pill = document.querySelector(`#gi-${id} .store-pill`);
   if (pill) { pill.dataset.store = item.store; pill.textContent = STORE_LABELS[item.store] || 'Other'; }
   updateCounts();
   saveLocal();
-  saveAssignments();
+  // Push store to server (numeric IDs only)
+  if (typeof item.id === 'number') {
+    nucCall('PUT', '/grocery/items/' + item.id + '/store', {store: item.store})
+      .catch(e => console.warn('PUT store failed:', e.message));
+  }
 }
 
 function updateQty(id, val) {
@@ -797,103 +821,79 @@ function addManual() {
 // GITHUB — IMPORT FROM NOURISH
 // ═══════════════════════════════════════════
 async function importFromNourish() {
-  const {user, repo, token} = ghConfig;
-
-  // Show config state so we can debug
-  const configSummary = `user="${user||'MISSING'}" repo="${repo||'MISSING'}" token="${token ? token.slice(0,8)+'…' : 'MISSING'}"`;
-  console.log('Import config:', configSummary);
-
-  if (!user || !repo || !token) {
+  if (!localStorage.getItem('nourish_browser_token')) {
     openSettings();
-    showToast(`Settings needed: ${configSummary}`);
+    showToast('Paste your NUC token in ⚙ settings first');
     return;
   }
 
-  showToast('Fetching grocery_current.json…');
+  showToast('Fetching grocery list…');
 
-  const ghFetch = async (path) => {
-    const url = `https://api.github.com/repos/${user}/${repo}/contents/${path}`;
-    console.log('Fetching:', url);
-    const r = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }
-    });
-    console.log(`  → ${r.status} ${r.statusText}`);
-    return r;
-  };
-
-  const parseFile = (file) => {
-    try {
-      const content = file.content.replace(/\n/g,'');
-      const decoded = atob(content);
-      return JSON.parse(decoded);
-    } catch(e) {
-      console.error('parseFile error:', e);
-      return null;
-    }
-  };
-
+  let data;
   try {
-    let rawItems = [];
-    let source = '';
-
-    // ── Try 1: grocery_current.json ───────────────────────────────────────────
-    const grocResp = await ghFetch('data/grocery_current.json');
-    if (grocResp.ok) {
-      const fileJson = await grocResp.json();
-      console.log('File size:', fileJson.size, 'bytes');
-      const data = parseFile(fileJson);
-      console.log('Parsed data keys:', data ? Object.keys(data) : 'null');
-      if (data?.groceries) {
-        rawItems = Object.values(data.groceries).flat().filter(Boolean);
-        source = `grocery_current.json (${data.weekOf || 'no weekOf'})`;
-        console.log('Items found:', rawItems.length, rawItems.slice(0,3));
-      } else {
-        showToast(`❌ grocery_current.json has no "groceries" key — keys: ${data ? Object.keys(data).join(', ') : 'null'}`);
-        return;
-      }
-    } else {
-      const status = grocResp.status;
-      console.log('grocery_current.json failed:', status);
-      if (status === 401) { showToast('❌ Token invalid — re-enter in ⚙ settings'); return; }
-      if (status === 403) { showToast('❌ Token lacks repo permission — check scopes'); return; }
-      if (status === 404) { showToast('❌ grocery_current.json not found — click "Done" in Nourish first'); return; }
-      showToast(`❌ GitHub error ${status} fetching grocery list`); return;
-    }
-
-    if (!rawItems.length) {
-      showToast('Grocery list file exists but is empty');
-      return;
-    }
-
-    // ── Import items ──────────────────────────────────────────────────────────
-    const savedAssignments = getSavedAssignments();
-    items = [];
-    gCounter = 0;
-    rawItems.forEach(raw => {
-      const { name } = parseGroceryString(raw);
-      const savedStore = savedAssignments[name.toLowerCase()];
-      addItem(raw, savedStore || null);
-    });
-
-    render();
-    showToast(`✓ ${items.length} items imported from Nourish`);
-    if (source) console.log('Import source:', source);
-    saveAssignments();
-
+    data = await nucCall('GET', '/grocery/current');
   } catch(e) {
-    showToast('Import failed: ' + e.message);
+    if (String(e.message).includes('401')) showToast('❌ Token invalid — re-enter in ⚙ settings');
+    else showToast('❌ ' + e.message);
+    return;
   }
+
+  if (!data?.groceries || !Object.keys(data.groceries).length) {
+    showToast('Grocery list is empty — open Nourish and click Done first');
+    return;
+  }
+
+  // ── One-shot localStorage migration (legacy → server) ──────────────────────
+  // If the user has a legacy `shop_assignments` map, push each as a server-side
+  // store assignment for items that have no server-side store yet. Then delete
+  // the localStorage entry so this only runs once.
+  const legacyAssign = (() => {
+    try { return JSON.parse(localStorage.getItem('shop_assignments') || '{}'); }
+    catch(e) { return {}; }
+  })();
+  const willMigrate = Object.keys(legacyAssign).length > 0;
+  const migrationPromises = [];
+
+  // ── Build local items from server response ────────────────────────────────
+  items = [];
+  gCounter = 0;
+  Object.entries(data.groceries).forEach(([category, list]) => {
+    list.forEach(it => {
+      const name = parseGroceryString(it.item).name || it.item;
+      const qty  = parseGroceryString(it.item).qty || '';
+      let store = it.store || null;
+      // Legacy migration: if server has no store but localStorage did, push it up
+      if (!store && legacyAssign[name.toLowerCase()]) {
+        store = legacyAssign[name.toLowerCase()];
+        migrationPromises.push(
+          nucCall('PUT', '/grocery/items/' + it.id + '/store', {store})
+            .catch(e => console.warn('legacy store migration failed:', e.message))
+        );
+      }
+      // Fall back to auto-assign if still no store
+      if (!store) store = autoAssign(name);
+      items.push({
+        id: it.id,             // ← server id (matches grocery_items.id)
+        name, qty, store,
+        checked: it.status === 'bought',
+        category: categorise(name),
+      });
+    });
+  });
+
+  if (willMigrate) {
+    Promise.all(migrationPromises).then(() => {
+      localStorage.removeItem('shop_assignments');
+      console.log('Legacy shop_assignments migrated to server, then cleared.');
+    });
+  }
+
+  render();
+  showToast(`✓ ${items.length} items imported (week of ${data.weekOf || '?'})`);
 }
 
-// Persist store assignments so they're remembered across imports
-function getSavedAssignments() {
-  try { return JSON.parse(localStorage.getItem('shop_assignments') || '{}'); } catch(e) { return {}; }
-}
-function saveAssignments() {
-  const map = {};
-  items.forEach(i => { map[i.name.toLowerCase()] = i.store; });
-  localStorage.setItem('shop_assignments', JSON.stringify(map));
-}
+// Store assignments now live on the server (PUT /grocery/items/{id}/store
+// fires from cycleStore). The legacy localStorage helpers are gone.
 
 // ═══════════════════════════════════════════
 // INSTACART SEND
@@ -916,21 +916,16 @@ function sendInstacartItems() {
 // SETTINGS
 // ═══════════════════════════════════════════
 function openSettings() {
-  document.getElementById('s-user').value  = ghConfig.user;
-  document.getElementById('s-repo').value  = ghConfig.repo;
-  document.getElementById('s-token').value = ghConfig.token;
+  document.getElementById('s-token').value = localStorage.getItem('nourish_browser_token') || '';
   document.getElementById('settings-overlay').classList.add('open');
 }
 
 function saveSettings() {
-  ghConfig.user  = document.getElementById('s-user').value.trim();
-  ghConfig.repo  = document.getElementById('s-repo').value.trim();
-  ghConfig.token = document.getElementById('s-token').value.trim();
-  localStorage.setItem('shop_gh_user',  ghConfig.user);
-  localStorage.setItem('shop_gh_repo',  ghConfig.repo);
-  localStorage.setItem('shop_gh_token', ghConfig.token);
+  const token = document.getElementById('s-token').value.trim();
+  if (!token) { showToast('Paste a token first'); return; }
+  localStorage.setItem('nourish_browser_token', token);
   document.getElementById('settings-overlay').classList.remove('open');
-  showToast('✓ Connected to GitHub');
+  showToast('✓ Token saved');
 }
 
 function handleSheetClick(e) {
@@ -944,7 +939,6 @@ function handleSheetClick(e) {
 // ═══════════════════════════════════════════
 function saveLocal() {
   localStorage.setItem('shop_items', JSON.stringify(items));
-  saveAssignments();
 }
 
 function showToast(msg) {
@@ -955,35 +949,11 @@ function showToast(msg) {
   window._toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-// ── Load config.json from GitHub (written by settings.html) ────────────────
-async function loadSharedConfig() {
-  const user  = localStorage.getItem('gh_user')  || localStorage.getItem('shop_gh_user')  || '';
-  const repo  = localStorage.getItem('gh_repo')  || localStorage.getItem('shop_gh_repo')  || '';
-  const token = localStorage.getItem('gh_token') || localStorage.getItem('shop_gh_token') ||
-                localStorage.getItem('bootstrap_token') || '';
-  if (!user || !repo || !token) return;
-  try {
-    const r = await fetch(
-      `https://api.github.com/repos/${user}/${repo}/contents/data/config.json`,
-      { headers: { Authorization:`Bearer ${token}`, Accept:'application/vnd.github+json' } }
-    );
-    if (!r.ok) return;
-    const file = await r.json();
-    const cfg = JSON.parse(atob(file.content.replace(/\n/g,'')));
-    if (cfg.anthropic?.key)  localStorage.setItem('nk',       cfg.anthropic.key);
-    if (cfg.instacart?.key)  localStorage.setItem('ic_key',   cfg.instacart.key);
-    if (cfg.github?.user)    localStorage.setItem('gh_user',  cfg.github.user);
-    if (cfg.github?.repo)    localStorage.setItem('gh_repo',  cfg.github.repo);
-    if (cfg.servings && document.getElementById('servings'))
-      document.getElementById('servings').value = cfg.servings;
-    if (cfg.cookTime && document.getElementById('cook-time'))
-      document.getElementById('cook-time').value = cfg.cookTime;
-    if (cfg.avoids && document.getElementById('avoids'))
-      document.getElementById('avoids').value = cfg.avoids;
-    console.log('Config loaded from GitHub');
-  } catch(e) { console.log('Config load skipped:', e.message); }
-}
-loadSharedConfig();
+// Config loading deferred — the grocery app doesn't actually use the
+// servings/cookTime/avoids fields here (no DOM elements with those IDs in
+// this file). If we ever do, fetch via:
+//   const cfg = await nucCall('GET', '/config');
+//   ...apply fields...
 
 window.updateStoresFromConfig = (s) => { console.log("stores updated", s); };
 </script>
