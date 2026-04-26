@@ -415,8 +415,7 @@ body {
   <div class="header-top">
     <div class="app-title">Shop <span id="week-label"></span></div>
     <div class="header-btns">
-      <a href="settings.html" class="hbtn ghost" style="text-decoration:none">⚙ Settings</a>
-      <a href="settings.html" class="hbtn ghost" style="text-decoration:none">⚙</a>
+      <button class="hbtn ghost" onclick="openSettings()" title="Settings">⚙</button>
       <button class="hbtn ghost" onclick="importFromNourish()">↓ Nourish</button>
     </div>
   </div>
@@ -467,13 +466,9 @@ body {
 <div class="sheet-overlay" id="settings-overlay" onclick="handleSheetClick(event)">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <h2>Connect to Nutrition backend</h2>
-    <div class="sheet-field">
-      <label>Browser API token</label>
-      <input id="s-token" type="password" placeholder="paste your token…" autocomplete="off">
-      <div style="font-size:11px;color:#888;margin-top:4px">Get it from your password manager (entry: <code>nourish/browser_token</code>)</div>
-    </div>
-    <button class="sheet-save" onclick="saveSettings()">Save &amp; connect</button>
+    <h2>Settings</h2>
+    <div style="font-size:13px;color:#666;margin-bottom:16px">Signed in via cookie. Use Sign out to switch account or revoke this device.</div>
+    <button class="sheet-save" style="background:#666" onclick="signOut()">Sign out</button>
   </div>
 </div>
 
@@ -915,16 +910,12 @@ function sendInstacartItems() {
 // SETTINGS
 // ═══════════════════════════════════════════
 function openSettings() {
-  document.getElementById('s-token').value = localStorage.getItem('nourish_browser_token') || '';
   document.getElementById('settings-overlay').classList.add('open');
 }
 
-function saveSettings() {
-  const token = document.getElementById('s-token').value.trim();
-  if (!token) { showToast('Paste a token first'); return; }
-  localStorage.setItem('nourish_browser_token', token);
-  document.getElementById('settings-overlay').classList.remove('open');
-  showToast('✓ Token saved');
+function signOut() {
+  ['nourish_browser_token','shop_items','shop_assignments'].forEach(k => localStorage.removeItem(k));
+  location.href = 'https://nutrition-webhook.sunilahluwalia0777.workers.dev/logout';
 }
 
 function handleSheetClick(e) {

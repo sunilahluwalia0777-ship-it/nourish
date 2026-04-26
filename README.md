@@ -11,35 +11,32 @@ Live at: `sunilahluwalia0777-ship-it.github.io/nourish`
 
 ---
 
-## The three apps
+## The two apps
 
 | App | URL | What it does |
 |---|---|---|
 | **Meal Planner** | `/nourish` | Plan your week, generate grocery lists |
 | **Grocery** | `/nourish/grocery.html` | Shop in-store with your list |
-| **Settings** | `/nourish/settings.html` | Configure everything once |
 
 ---
 
 ## First-time setup
 
-1. Go to **Settings** (`/nourish/settings.html`)
-2. Paste your **Browser API token** in the Nutrition backend field
-   (get it from your password manager — entry: `nourish/browser_token`)
-3. Click **Test connection** → expect "✓ Connected · NUC"
-4. Set your preferred stores, servings per meal, and family members
-5. Click **Save all settings**
+1. Open the Meal Planner — you'll be redirected to a sign-in page
+2. Enter the password (from your password manager — entry: `nourish/login_password`)
+3. You're back at the Meal Planner. Cookie set for 30 days on this browser.
 
-The browser token is saved to localStorage on this browser only. All
-preferences and data live on the NUC.
+The session cookie is `HttpOnly` (JavaScript can't see it) and `SameSite=None; Secure`. It carries automatically on every cross-origin fetch from the apps to the NUC backend.
 
-> **On a new device or browser** — visit Settings, paste the browser
-> token, and everything else loads automatically.
+> **On a new device or browser** — open the Meal Planner. You'll be redirected to sign in. Enter the same password. Done.
 
-> **What about the old GitHub PAT and Anthropic key?** Both are gone.
-> The GitHub PAT is no longer used (NUC is the data store now). The
-> Anthropic key moved server-side — the browser never holds it; the
-> NUC's `/claude/grocery-list` endpoint calls Claude on your behalf.
+> **Inside the app:** click **⚙ Settings** (Meal Planner header) or the gear in Grocery to reach the in-app settings panel: an Instacart API key field (optional), a Sign-out button, and the "Saved weeks" history list.
+
+> **What happened to the old GitHub PAT and Anthropic key?**
+> The GitHub PAT is no longer used (NUC is the data store now).
+> The Anthropic key moved server-side — the browser never holds it.
+> The standalone `settings.html` page was deleted in the 2026-04-26 cleanup;
+> remaining preferences (Instacart key, sign out) moved into the in-app panel.
 
 ---
 

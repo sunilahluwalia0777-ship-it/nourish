@@ -177,29 +177,23 @@ function openGithubPanel() {
   const isOpen = panel.classList.contains('open');
   panel.classList.toggle('open', !isOpen);
   if (!isOpen) {
-    document.getElementById('gh-token').value = localStorage.getItem('nourish_browser_token') || '';
-    if (isGhConnected()) loadGhHistory();
+    document.getElementById('ic-key').value = localStorage.getItem('ic_key') || '';
+    loadGhHistory();
   }
 }
 
-async function saveGithubSettings() {
-  const token = document.getElementById('gh-token').value.trim();
+function saveGithubSettings() {
+  const ic = document.getElementById('ic-key').value.trim();
+  localStorage.setItem('ic_key', ic);
   const st = document.getElementById('gh-status');
-  if (!token) { st.className = 'gh-status err'; st.textContent = 'Paste a token first.'; return; }
-  localStorage.setItem('nourish_browser_token', token);
   st.className = 'gh-status ok';
-  st.textContent = '✓ Token saved. Testing connection…';
-  try {
-    const cfg = await nucCall('GET', '/config');
-    st.textContent = `✓ Connected · ${Object.keys(cfg).length} config keys loaded`;
-    updateGhButton(true);
-    loadGhHistory();
-  } catch(e) {
-    st.className = 'gh-status err';
-    st.textContent = String(e.message).includes('401')
-      ? 'Token rejected — check it was copied correctly.'
-      : 'Could not reach NUC: ' + e.message;
-  }
+  st.textContent = ic ? '✓ Saved.' : '✓ Instacart key cleared.';
+}
+
+function signOut() {
+  // Clear local stuff (legacy bearer + any cached items) then redirect to /logout
+  ['nourish_browser_token','shop_items','shop_assignments'].forEach(k => localStorage.removeItem(k));
+  location.href = 'https://nutrition-webhook.sunilahluwalia0777.workers.dev/logout';
 }
 
 function updateGhButton(connected) {
@@ -1846,9 +1840,7 @@ a.src-link-back:hover { background: #303028; color: var(--gold-light); }
   <div class="header-actions">
     <span class="week-tag" id="week-tag"></span>
     <span id="gh-sync-status" style="font-size:11px;color:#6AAD7A;display:none">✓ Saved to GitHub</span>
-    <a href="settings.html" class="hbtn" style="text-decoration:none">⚙ Settings</a>
-    <a href="settings.html" class="hbtn" style="text-decoration:none;display:flex;align-items:center">⚙</a>
-    <button class="hbtn" id="gh-btn" onclick="openGithubPanel()" title="NUC sync settings">⬡ NUC</button>
+    <button class="hbtn" id="gh-btn" onclick="openGithubPanel()" title="Settings">⚙ Settings</button>
     <button class="hbtn" onclick="exportToExcel()">↓ Export</button>
     <button class="hbtn" onclick="clearAll()">Clear</button>
     <button class="hbtn primary" onclick="planningComplete()">Done — get grocery list</button>
@@ -1900,23 +1892,24 @@ a.src-link-back:hover { background: #303028; color: var(--gold-light); }
 
 <!-- Big Card Flip Overlay -->
 
-<!-- NUC Panel (replaces GitHub sync after 2026-04-26 cutover) -->
+<!-- Settings panel (replaces standalone settings.html after 2026-04-26 cleanup) -->
 <div class="gh-panel" id="gh-panel">
-  <div class="gh-panel-title">Nutrition backend</div>
+  <div class="gh-panel-title">Settings</div>
   <div class="gh-panel-sub">Your plans save automatically to the NUC after each "Planning complete"</div>
 
   <div class="gh-field">
-    <label>Browser API token</label>
-    <input type="password" id="gh-token" placeholder="paste your token…" autocomplete="off">
-    <div style="font-size:11px;color:var(--text3);margin-top:4px">Stored in this browser. Get it from your password manager (entry: <code>nourish/browser_token</code>).</div>
+    <label>Instacart API key <span style="font-size:10px;color:var(--text3);font-weight:400">(optional, for "Shop on Instacart")</span></label>
+    <input type="password" id="ic-key" placeholder="Optional" autocomplete="off">
   </div>
-
-  <button class="gh-save-btn" onclick="saveGithubSettings()">Save &amp; connect</button>
+  <button class="gh-save-btn" onclick="saveGithubSettings()">Save</button>
   <div class="gh-status" id="gh-status"></div>
 
   <div class="gh-divider"></div>
+  <button class="gh-save-btn" style="background:transparent;color:var(--text3);border:1px solid var(--text3)" onclick="signOut()">Sign out</button>
+
+  <div class="gh-divider"></div>
   <div style="font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text3);margin-bottom:8px">Saved weeks</div>
-  <div id="gh-history-list" style="font-size:12px;color:var(--text3)">Connect to see history</div>
+  <div id="gh-history-list" style="font-size:12px;color:var(--text3)">Loading…</div>
 </div>
 
 
@@ -3427,29 +3420,23 @@ function openGithubPanel() {
   const isOpen = panel.classList.contains('open');
   panel.classList.toggle('open', !isOpen);
   if (!isOpen) {
-    document.getElementById('gh-token').value = localStorage.getItem('nourish_browser_token') || '';
-    if (isGhConnected()) loadGhHistory();
+    document.getElementById('ic-key').value = localStorage.getItem('ic_key') || '';
+    loadGhHistory();
   }
 }
 
-async function saveGithubSettings() {
-  const token = document.getElementById('gh-token').value.trim();
+function saveGithubSettings() {
+  const ic = document.getElementById('ic-key').value.trim();
+  localStorage.setItem('ic_key', ic);
   const st = document.getElementById('gh-status');
-  if (!token) { st.className = 'gh-status err'; st.textContent = 'Paste a token first.'; return; }
-  localStorage.setItem('nourish_browser_token', token);
   st.className = 'gh-status ok';
-  st.textContent = '✓ Token saved. Testing connection…';
-  try {
-    const cfg = await nucCall('GET', '/config');
-    st.textContent = `✓ Connected · ${Object.keys(cfg).length} config keys loaded`;
-    updateGhButton(true);
-    loadGhHistory();
-  } catch(e) {
-    st.className = 'gh-status err';
-    st.textContent = String(e.message).includes('401')
-      ? 'Token rejected — check it was copied correctly.'
-      : 'Could not reach NUC: ' + e.message;
-  }
+  st.textContent = ic ? '✓ Saved.' : '✓ Instacart key cleared.';
+}
+
+function signOut() {
+  // Clear local stuff (legacy bearer + any cached items) then redirect to /logout
+  ['nourish_browser_token','shop_items','shop_assignments'].forEach(k => localStorage.removeItem(k));
+  location.href = 'https://nutrition-webhook.sunilahluwalia0777.workers.dev/logout';
 }
 
 function updateGhButton(connected) {
@@ -3716,22 +3703,9 @@ document.addEventListener('click', e => {
 })();
 
 
-// ── Load shared config from NUC ────────────────────────────────────────────
-async function loadSharedConfig() {
-  // Silent on 401 — never redirects from init.
-  try {
-    const cfg = await nucCall('GET', '/config', undefined, {silent: true});
-    if (!cfg) return;
-    if (cfg.instacart?.key) localStorage.setItem('ic_key', cfg.instacart.key);
-    if (cfg.servings && document.getElementById('servings'))
-      document.getElementById('servings').value = cfg.servings;
-    if (cfg.cookTime && document.getElementById('cook-time'))
-      document.getElementById('cook-time').value = cfg.cookTime;
-    if (cfg.avoids && document.getElementById('avoids'))
-      document.getElementById('avoids').value = cfg.avoids;
-  } catch(e) { console.log('Config load skipped:', e.message); }
-}
-loadSharedConfig();
+// loadSharedConfig() removed at 2026-04-26 cleanup — it tried to populate
+// form fields that don't exist in this app (servings, cook-time, avoids
+// were only in the old standalone settings.html which has been deleted).
 
 
 
