@@ -116,7 +116,7 @@ Open at `/nourish/grocery.html`. Designed for use on your phone while in-store.
 
 ### Importing your list
 
-Tap **↓ Nourish** to import the grocery list generated in the Meal Planner. The list loads automatically from GitHub.
+Tap **↓ Import** to pull the grocery list generated in the Meal Planner. The list loads from the NUC. (To switch over to the planner itself, tap **🍽 Nourish**.)
 
 > You need to click "Done — get grocery list" in Nourish at least once before the import works.
 
