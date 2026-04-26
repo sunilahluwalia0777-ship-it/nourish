@@ -1844,18 +1844,8 @@ a.src-link-back:hover { background: #303028; color: var(--gold-light); }
   </div>
 </header>
 
-<div id="api-strip">
-  <label>ANTHROPIC</label>
-  <input type="password" id="api-key" placeholder="sk-ant-api03-…" autocomplete="off">
-  <button class="api-save" onclick="saveKey()">Save</button>
-  <span id="api-status"></span>
-  <div style="width:1px;background:#3A3730;height:18px;margin:0 6px;flex-shrink:0"></div>
-  <label style="color:#43A86B">INSTACART</label>
-  <input type="password" id="ic-key" placeholder="Instacart API key…" autocomplete="off" style="max-width:260px">
-  <button class="api-save" onclick="saveIcKey()">Save</button>
-  <span id="ic-status"></span>
-  <a href="https://www.instacart.com/company/business/developers" target="_blank" style="font-size:10px;color:#3A6B50;margin-left:4px;text-decoration:none;white-space:nowrap">Get key →</a>
-</div>
+<!-- API key inputs removed at 2026-04-26 cutover.
+     Anthropic key is now server-side (NUC). Instacart key entry moved to settings.html. -->
 
 <div class="main-body">
   <div class="calendar-area" id="calendar-area"></div>
@@ -2238,38 +2228,13 @@ let gCounter = 0;
   window._todayIdx = (now.getDay()+6)%7;
 })();
 
-// API key
-function saveKey() {
-  const v = document.getElementById('api-key').value.trim();
-  const st = document.getElementById('api-status');
-  if (!v || !v.startsWith('sk-')) { st.textContent='Invalid key'; st.className='api-err'; return; }
-  localStorage.setItem('nk', v);
-  st.textContent='✓ Saved'; st.className='api-ok';
-}
+// API key handling removed at 2026-04-26 cutover. Anthropic key lives in
+// the NUC env (`/claude/grocery-list` proxies on the user's behalf), and
+// the Instacart key entry moved to settings.html. The init below just
+// updates the NUC button state.
 (function() {
-  const k = localStorage.getItem('nk');
-  if (k) {
-    document.getElementById('api-key').value=k;
-    document.getElementById('api-status').textContent='✓ Saved';
-    document.getElementById('api-status').className='api-ok';
-  }
-  // If config.js loaded keys, reflect that after a short delay
-  setTimeout(() => {
-    const cfg = window.NOURISH_CONFIG || {};
-    if (cfg.anthropicKey && !document.getElementById('api-key').value) {
-      document.getElementById('api-key').value = cfg.anthropicKey;
-      document.getElementById('api-status').textContent = '✓ config.js';
-      document.getElementById('api-status').className = 'api-ok';
-    }
-    if (cfg.instacartKey && !document.getElementById('ic-key').value) {
-      document.getElementById('ic-key').value = cfg.instacartKey;
-      document.getElementById('ic-status').textContent = '✓ config.js';
-      document.getElementById('ic-status').className = 'api-ok';
-    }
-    if (isGhConnected()) updateGhButton(true);
-  }, 500);
+  if (isGhConnected()) updateGhButton(true);
 })();
-function getKey() { return localStorage.getItem('nk') || window.NOURISH_CONFIG?.anthropicKey || document.getElementById('api-key').value.trim(); }
 
 // ══════════════════════════════════════════════════════
 // BUILD CALENDAR
@@ -2855,22 +2820,11 @@ async function generateGroceryList(haveItems) {
 // INSTACART API INTEGRATION
 // ══════════════════════════════════════════════════════
 
-function saveIcKey() {
-  const v = document.getElementById('ic-key').value.trim();
-  const st = document.getElementById('ic-status');
-  if (!v) { st.textContent='Enter a key'; st.className='api-err'; return; }
-  localStorage.setItem('ic_key', v);
-  st.textContent='✓ Saved'; st.className='api-ok';
+// Instacart key entry moved to settings.html at 2026-04-26 cutover.
+// The Instacart shopping calls below still read the key via getIcKey().
+function getIcKey() {
+  return localStorage.getItem('ic_key') || window.NOURISH_CONFIG?.instacartKey || '';
 }
-(function() {
-  const k = localStorage.getItem('ic_key');
-  if (k) {
-    document.getElementById('ic-key').value = k;
-    document.getElementById('ic-status').textContent = '✓ Saved';
-    document.getElementById('ic-status').className = 'api-ok';
-  }
-})();
-function getIcKey() { return localStorage.getItem('ic_key') || window.NOURISH_CONFIG?.instacartKey || document.getElementById('ic-key').value.trim(); }
 
 // Parse "2 cups chicken breast" → {quantity, unit, name}
 function parseIngredient(raw) {
