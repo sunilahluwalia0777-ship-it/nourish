@@ -1628,7 +1628,7 @@ const MEALS = {
 // ══════════════════════════════════════════════════════
 // CONSTANTS & STATE
 // ══════════════════════════════════════════════════════
-const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MEAL_TYPES = ['breakfast','lunch','snack','dinner'];
 const TABS = {
   breakfast:['All','Everything',"Chef D'ole",'Veggie','Low carb'],
@@ -1650,13 +1650,13 @@ let gCounter = 0;
 // ══════════════════════════════════════════════════════
 (function initWeek() {
   const now = new Date();
-  const mon = new Date(now);
-  mon.setDate(now.getDate() - ((now.getDay()+6)%7));
-  const sun = new Date(mon); sun.setDate(mon.getDate()+6);
+  const start = new Date(now);
+  start.setDate(now.getDate() - now.getDay()); // Sunday-start week
+  const end = new Date(start); end.setDate(start.getDate()+6);
   const fmt = d => d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-  document.getElementById('week-tag').textContent = `${fmt(mon)} – ${fmt(sun)}`;
-  window._mondayDate = mon;
-  window._todayIdx = (now.getDay()+6)%7;
+  document.getElementById('week-tag').textContent = `${fmt(start)} – ${fmt(end)}`;
+  window._weekStartDate = start;
+  window._todayIdx = now.getDay();
 })();
 
 // API key handling removed at 2026-04-26 cutover. Anthropic key lives in
@@ -2276,7 +2276,7 @@ function closeGrocery() { document.getElementById('grocery-drawer').classList.re
 // ══════════════════════════════════════════════════════
 function exportToExcel() {
   const wb = XLSX.utils.book_new();
-  const ws = new Date(window._mondayDate);
+  const ws = new Date(window._weekStartDate);
   const wkStr = ws.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   // Sheet 1: Plan
   const rows = [['Nourish Weekly Plan',`Week of ${wkStr}`,'','','','','',''],['', ...DAYS],[]];
@@ -2742,7 +2742,7 @@ function _ghShim(obj) {
 
 // Serialise the current plan to a plain object
 function serialisePlan() {
-  const weekKey = window._mondayDate.toISOString().slice(0, 10);
+  const weekKey = window._weekStartDate.toISOString().slice(0, 10);
   const out = { weekOf: weekKey, savedAt: new Date().toISOString(), days: {} };
   DAYS.forEach((day, di) => {
     out.days[day] = {};
@@ -2763,7 +2763,7 @@ function serialisePlan() {
 // Save weekly plan + update history index
 async function saveToGithub() {
   if (!isGhConnected()) return;
-  const weekKey = window._mondayDate.toISOString().slice(0, 10);
+  const weekKey = window._weekStartDate.toISOString().slice(0, 10);
   const planData = serialisePlan();
 
   showGhSyncStatus('saving');
