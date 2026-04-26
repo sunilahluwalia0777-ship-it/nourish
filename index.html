@@ -1631,10 +1631,10 @@ const MEALS = {
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MEAL_TYPES = ['breakfast','lunch','snack','dinner'];
 const TABS = {
-  breakfast:['All','Everything',"Chef D'ole",'Veggie','Low carb'],
-  lunch:['All','Everything','Chicken','Fish','Turkey','Veggie','Low carb'],
-  snack:['All','Everything','Veggie','Low carb'],
-  dinner:['All','Everything','Chicken','Fish','Turkey','Indian','Veggie',"Chef D'ole",'Low carb'],
+  breakfast:['All',"Chef D'ole",'Veggie','Low carb'],
+  lunch:['All','Chicken','Fish','Turkey','Veggie','Low carb'],
+  snack:['All','Veggie','Low carb'],
+  dinner:['All','Chicken','Fish','Turkey','Indian','Veggie',"Chef D'ole",'Low carb'],
 };
 const TAG_MAP = {"Chef D'ole":'chef',Veggie:'veggie','Low carb':'lowcarb',Chicken:'chicken',Fish:'fish',Turkey:'turkey',Indian:'indian',All:null,Everything:'__all__'};
 
@@ -1940,8 +1940,9 @@ function openCarousel(dayIdx, mealType) {
   document.getElementById('drawer-search').value = '';
 
   const typeColors = {breakfast:'var(--gold)',lunch:'var(--green)',snack:'var(--blue)',dinner:'var(--rose)'};
+  const totalOptions = Object.values(MEALS).flat().length;
   document.getElementById('drawer-title').innerHTML = `Choose <em>${mealType}</em>`;
-  document.getElementById('drawer-sub').textContent = `${DAYS[dayIdx]} · ${MEALS[mealType].length} options`;
+  document.getElementById('drawer-sub').textContent = `${DAYS[dayIdx]} · ${totalOptions} options`;
 
   // Tabs
   const tabs = TABS[mealType] || ['All'];
@@ -2012,11 +2013,12 @@ function renderCarousel() {
       </div>`;
   }
 
-  // 'Everything' tab shows ALL meals across ALL types
-  const isEverything = activeTab === 'Everything';
-  const sourcePool = isEverything
-    ? Object.entries(MEALS).flatMap(([type, meals]) => meals.map(m => ({...m, _sourceType: type})))
-    : MEALS[mealType].map(m => ({...m, _sourceType: mealType}));
+  // Always show all meals across all types — meal_type is just an
+  // organisational hint. Any meal can go in any slot (e.g. juice in
+  // dinner, breakfast oats as a snack).
+  const sourcePool = Object.entries(MEALS).flatMap(([type, meals]) =>
+    meals.map(m => ({...m, _sourceType: type}))
+  );
 
   const list = sourcePool.filter(m =>
     (!tagFilter || tagFilter === '__all__' || m.tags.includes(tagFilter)) &&
@@ -2033,7 +2035,9 @@ function renderCarousel() {
   cards += list.map(m => {
     const isSel = current?.id === m.id;
     const tagsHtml = m.tags.map(t => `<span class="c-tag ${t}">${t}</span>`).join('');
-    const mealTypeBadge = isEverything && m._sourceType !== mealType
+    // Show source-type badge whenever a meal's home category differs
+    // from the slot you're filling, so it's clear where the meal came from.
+    const mealTypeBadge = m._sourceType !== mealType
       ? `<span class="c-tag" style="background:var(--gold-pale);color:var(--gold);text-transform:capitalize">${m._sourceType}</span>`
       : '';
     const srcIcon = m.srcType==='chef'?'📖':m.srcType==='youtube'?'▶':m.srcType==='web'?'🌐':'';
@@ -2059,9 +2063,10 @@ function renderCarousel() {
 function selectCarouselMeal(mealId) {
   if (!activeCarousel) return;
   const {dayIdx, mealType} = activeCarousel;
-  const meal = MEALS[mealType].find(m => m.id === mealId);
+  // Search across all meal-type buckets — the carousel shows the full
+  // pool now, so the chosen meal's home type may not match the slot type.
+  const meal = Object.values(MEALS).flat().find(m => m.id === mealId);
   if (meal) { setMeal(dayIdx, mealType, meal); renderCarousel(); }
-  // briefly show check then close
   setTimeout(closeCarousel, 600);
 }
 
