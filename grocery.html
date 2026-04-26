@@ -296,7 +296,6 @@ body {
   transition: opacity .15s;
 }
 .bottom-bar button:active { opacity: .8; }
-.btn-instacart { background: var(--instacart); color: #fff; }
 .btn-clear { background: var(--bg); color: var(--text2); font-weight: 600; }
 
 /* ── Settings sheet ── */
@@ -459,7 +458,6 @@ body {
 
 <div class="bottom-bar" id="bottom-bar">
   <button class="btn-clear" onclick="clearChecked()">Clear done</button>
-  <button class="btn-instacart" onclick="sendInstacartItems()">🛒 Order Instacart items</button>
 </div>
 
 <!-- Settings sheet -->
@@ -888,23 +886,6 @@ async function importFromNourish() {
 
 // Store assignments now live on the server (PUT /grocery/items/{id}/store
 // fires from cycleStore). The legacy localStorage helpers are gone.
-
-// ═══════════════════════════════════════════
-// INSTACART SEND
-// ═══════════════════════════════════════════
-function sendInstacartItems() {
-  const icItems = items.filter(i => i.store === 'instacart' && !i.checked);
-  if (!icItems.length) {
-    showToast('No Instacart items in your list');
-    return;
-  }
-  const query = icItems.map(i => i.name).slice(0,8).join(', ');
-  const listText = icItems.map(i => `• ${i.name}${i.qty?' ('+i.qty+')':''}`).join('\n');
-  if (confirm(`Send ${icItems.length} items to Instacart?\n\n${listText}`)) {
-    window.open('https://www.instacart.com', '_blank');
-    showToast('Opening Instacart…');
-  }
-}
 
 // ═══════════════════════════════════════════
 // SETTINGS

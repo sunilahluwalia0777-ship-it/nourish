@@ -30,13 +30,13 @@ The session cookie is `HttpOnly` (JavaScript can't see it) and `SameSite=None; S
 
 > **On a new device or browser** — open the Meal Planner. You'll be redirected to sign in. Enter the same password. Done.
 
-> **Inside the app:** click **⚙ Settings** (Meal Planner header) or the gear in Grocery to reach the in-app settings panel: an Instacart API key field (optional), a Sign-out button, and the "Saved weeks" history list.
+> **Inside the app:** click **⚙ Settings** (Meal Planner header) or the gear in Grocery to reach the in-app settings panel: a Sign-out button and the "Saved weeks" history list.
 
 > **What happened to the old GitHub PAT and Anthropic key?**
 > The GitHub PAT is no longer used (NUC is the data store now).
 > The Anthropic key moved server-side — the browser never holds it.
 > The standalone `settings.html` page was deleted in the 2026-04-26 cleanup;
-> remaining preferences (Instacart key, sign out) moved into the in-app panel.
+> the sign-out button moved into the in-app panel.
 
 ---
 
@@ -79,14 +79,6 @@ This does three things:
 3. Saves the grocery list to the NUC (`PUT /api/grocery/current`) so the Grocery app can read it
 
 The grocery list appears in a panel on the right, grouped into: Produce, Proteins, Dairy & Eggs, Grains & Pantry, Condiments & Spices, and Frozen & Other.
-
----
-
-### Instacart integration
-
-**Per meal** — when viewing a recipe on the flip card back, tap **🛒 Shop on Instacart** to send that meal's ingredients directly to an Instacart cart. A link is generated and opens in Instacart where you can review and check out.
-
-**Full week** — in the grocery panel, tap **Send full week to Instacart** to send all week's ingredients as one cart. Requires an Instacart Developer API key in Settings.
 
 ---
 
@@ -151,10 +143,6 @@ Tap **Clear done** to permanently remove all checked items from the list.
 
 Type in the bar at the top of the list and tap **Add**. Items are auto-assigned to a store based on their name.
 
-### Ordering Instacart items
-
-Tap **🛒 Order Instacart items** at the bottom to open Instacart with your Instacart-assigned items.
-
 ---
 
 ## Settings
@@ -163,7 +151,6 @@ Tap **🛒 Order Instacart items** at the bottom to open Instacart with your Ins
 |---|---|
 | GitHub token | Allows all apps to read/write your data repo |
 | Anthropic key | Powers the grocery list generation |
-| Instacart key | Enables direct cart creation on Instacart |
 | Servings per meal | Default used by the meal planner |
 | Default cook time | Filters out meals that take too long |
 | Allergies / avoid | Passed to Claude when generating lists |

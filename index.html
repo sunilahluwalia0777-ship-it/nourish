@@ -84,18 +84,6 @@ function openBigCard(e, dayIdx, mealType) {
   // Reset to front face
   document.getElementById('bigcard-flipper').classList.remove('flipped');
 
-  // Add Instacart button to big card nutrition panel
-  const icOld = document.getElementById('bc-ic-container');
-  if (icOld) icOld.remove();
-  const icDiv = document.createElement('div');
-  icDiv.id = 'bc-ic-container';
-  icDiv.className = 'ic-back-container';
-  icDiv.style.cssText = 'margin-top:10px';
-  icDiv.innerHTML = `<button class="ic-back-btn" onclick="shopMealOnInstacart(this,'${meal.id}','${mealType}')">
-    🛒 Shop on Instacart
-  </button>`;
-  document.getElementById('bc-src-link').after(icDiv);
-
   // Open overlay
   const overlay = document.getElementById('bigcard-overlay');
   overlay.style.display = 'flex';
@@ -176,19 +164,12 @@ function openGithubPanel() {
   const panel = document.getElementById('gh-panel');
   const isOpen = panel.classList.contains('open');
   panel.classList.toggle('open', !isOpen);
-  if (!isOpen) {
-    document.getElementById('ic-key').value = localStorage.getItem('ic_key') || '';
-    loadGhHistory();
-  }
+  if (!isOpen) loadGhHistory();
 }
 
-function saveGithubSettings() {
-  const ic = document.getElementById('ic-key').value.trim();
-  localStorage.setItem('ic_key', ic);
-  const st = document.getElementById('gh-status');
-  st.className = 'gh-status ok';
-  st.textContent = ic ? '✓ Saved.' : '✓ Instacart key cleared.';
-}
+// saveGithubSettings is kept as a no-op stub in case any old onclick still
+// references it; nothing currently does after the 2026-04-26 cleanup.
+function saveGithubSettings() {}
 
 function signOut() {
   // Clear local stuff (legacy bearer + any cached items) then redirect to /logout
@@ -1669,116 +1650,6 @@ header {
 }
 a.src-link-back:hover { background: #303028; color: var(--gold-light); }
 
-
-/* ─── Instacart integration ───────────────────────────────────────────────── */
-.ic-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: #003D29;
-  color: #43A86B;
-  border: 1px solid #1A5C3A;
-  font-family: var(--sans);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 8px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all .2s;
-  width: 100%;
-  justify-content: center;
-  letter-spacing: 0.3px;
-}
-.ic-btn:hover { background: #004D34; border-color: #43A86B; color: #6CCBA0; }
-.ic-btn:disabled { opacity: .5; cursor: not-allowed; }
-.ic-btn .ic-logo { font-size: 14px; }
-
-.ic-meal-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: #003D29;
-  color: #43A86B;
-  border: 1px solid #1A5C3A;
-  font-family: var(--sans);
-  font-size: 10px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all .18s;
-  white-space: nowrap;
-  text-decoration: none;
-}
-.ic-meal-btn:hover { background: #004D34; color: #6CCBA0; }
-
-.ic-spinner {
-  width: 12px; height: 12px;
-  border: 1.5px solid rgba(67,168,107,.3);
-  border-top-color: #43A86B;
-  border-radius: 50%;
-  animation: spin .7s linear infinite;
-  flex-shrink: 0;
-}
-
-.ic-link-result {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 9px 12px;
-  background: #001A0F;
-  border: 1px solid #1A5C3A;
-  border-radius: 8px;
-  font-size: 12px;
-  color: #43A86B;
-  margin-top: 6px;
-}
-.ic-link-result a { color: #6CCBA0; text-decoration: none; font-weight: 600; }
-.ic-link-result a:hover { text-decoration: underline; }
-.ic-link-copy {
-  background: #1A5C3A;
-  border: none;
-  color: #43A86B;
-  font-size: 10px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-family: var(--sans);
-  transition: all .15s;
-}
-.ic-link-copy:hover { background: #43A86B; color: #001A0F; }
-.ic-status-msg {
-  font-size: 11px;
-  padding: 6px 0;
-  text-align: center;
-}
-.ic-status-msg.ok { color: #43A86B; }
-.ic-status-msg.err { color: var(--rose-light); }
-.ic-status-msg.loading { color: var(--text-inv2); display: flex; align-items: center; justify-content: center; gap: 6px; }
-
-/* Instacart button on the big card back */
-.ic-back-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-  padding: 8px 10px;
-  background: #002018;
-  border: 1px solid #1A5C3A;
-  border-radius: 8px;
-  color: #43A86B;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: var(--sans);
-  transition: all .18s;
-  text-decoration: none;
-  width: 100%;
-  justify-content: center;
-}
-.ic-back-btn:hover { background: #003020; border-color: #43A86B; color: #6CCBA0; }
-.ic-back-btn.loading { opacity: .7; cursor: wait; }
-
 /* ─── Grocery panel ───────────────────────────────────── */
 .grocery-drawer {
   position: fixed;
@@ -1840,6 +1711,7 @@ a.src-link-back:hover { background: #303028; color: var(--gold-light); }
   <div class="header-actions">
     <span class="week-tag" id="week-tag"></span>
     <span id="gh-sync-status" style="font-size:11px;color:#6AAD7A;display:none">✓ Saved to GitHub</span>
+    <a class="hbtn" href="grocery.html" style="text-decoration:none" title="Open Grocery shopping app">🛒 Grocery</a>
     <button class="hbtn" id="gh-btn" onclick="openGithubPanel()" title="Settings">⚙ Settings</button>
     <button class="hbtn" onclick="exportToExcel()">↓ Export</button>
     <button class="hbtn" onclick="clearAll()">Clear</button>
@@ -1848,7 +1720,7 @@ a.src-link-back:hover { background: #303028; color: var(--gold-light); }
 </header>
 
 <!-- API key inputs removed at 2026-04-26 cutover.
-     Anthropic key is now server-side (NUC). Instacart key entry moved to settings.html. -->
+     Anthropic key is now server-side (NUC). -->
 
 <div class="main-body">
   <div class="calendar-area" id="calendar-area"></div>
@@ -1897,14 +1769,6 @@ a.src-link-back:hover { background: #303028; color: var(--gold-light); }
   <div class="gh-panel-title">Settings</div>
   <div class="gh-panel-sub">Your plans save automatically to the NUC after each "Planning complete"</div>
 
-  <div class="gh-field">
-    <label>Instacart API key <span style="font-size:10px;color:var(--text3);font-weight:400">(optional, for "Shop on Instacart")</span></label>
-    <input type="password" id="ic-key" placeholder="Optional" autocomplete="off">
-  </div>
-  <button class="gh-save-btn" onclick="saveGithubSettings()">Save</button>
-  <div class="gh-status" id="gh-status"></div>
-
-  <div class="gh-divider"></div>
   <button class="gh-save-btn" style="background:transparent;color:var(--text3);border:1px solid var(--text3)" onclick="signOut()">Sign out</button>
 
   <div class="gh-divider"></div>
@@ -2233,9 +2097,8 @@ let gCounter = 0;
 })();
 
 // API key handling removed at 2026-04-26 cutover. Anthropic key lives in
-// the NUC env (`/claude/grocery-list` proxies on the user's behalf), and
-// the Instacart key entry moved to settings.html. The init below just
-// updates the NUC button state.
+// the NUC env (`/claude/grocery-list` proxies on the user's behalf). The
+// init below just updates the NUC button state.
 (function() {
   if (isGhConnected()) updateGhButton(true);
 })();
@@ -2821,168 +2684,7 @@ async function generateGroceryList(haveItems) {
 }
 
 
-// ══════════════════════════════════════════════════════
-// INSTACART API INTEGRATION
-// ══════════════════════════════════════════════════════
-
-// Instacart key entry moved to settings.html at 2026-04-26 cutover.
-// The Instacart shopping calls below still read the key via getIcKey().
-function getIcKey() {
-  return localStorage.getItem('ic_key') || window.NOURISH_CONFIG?.instacartKey || '';
-}
-
-// Parse "2 cups chicken breast" → {quantity, unit, name}
-function parseIngredient(raw) {
-  const UNITS = ['cup','cups','tbsp','tsp','oz','ounce','ounces','g','gram','grams','kg','lb','lbs','pound','pounds','ml','l','litre','liter','tablespoon','tablespoons','teaspoon','teaspoons','clove','cloves','slice','slices','can','cans','bunch','package','pkg','pinch','handful','piece','pieces','sprig','sprigs'];
-  const str = raw.replace(/[()]/g,'').trim();
-  // Try "N unit name" or "N/M unit name"
-  const m = str.match(/^([\d½¼¾⅓⅔]+(?:\/\d+)?(?:\.\d+)?)\s*([\w]+)?\s+(.*)/);
-  if (m) {
-    const qty = parseFloat(m[1].replace('½','.5').replace('¼','.25').replace('¾','.75').replace('⅓','.33').replace('⅔','.67')) || 1;
-    const maybeUnit = (m[2]||'').toLowerCase();
-    const isUnit = UNITS.includes(maybeUnit);
-    return {
-      quantity: qty,
-      unit: isUnit ? maybeUnit : 'each',
-      name: isUnit ? m[3].trim() : ((m[2]||'')+' '+m[3]).trim()
-    };
-  }
-  return { quantity: 1, unit: 'each', name: str };
-}
-
-// Normalise unit strings to Instacart accepted values
-function normaliseUnit(u) {
-  const map = {
-    cup:'cup', cups:'cup', tablespoon:'tablespoon', tablespoons:'tablespoon',
-    tbsp:'tablespoon', teaspoon:'teaspoon', teaspoons:'teaspoon', tsp:'teaspoon',
-    oz:'ounce', ounce:'ounce', ounces:'ounce',
-    g:'gram', gram:'gram', grams:'gram',
-    kg:'kilogram', lb:'pound', lbs:'pound', pound:'pound', pounds:'pound',
-    ml:'milliliter', l:'liter', litre:'liter', liter:'liter',
-    clove:'each', cloves:'each', slice:'each', slices:'each',
-    can:'each', cans:'each', bunch:'each', pinch:'each',
-    handful:'each', piece:'each', pieces:'each', package:'each',
-  };
-  return map[u.toLowerCase()] || 'each';
-}
-
-// Build Instacart LineItem array from a meal's ingredients
-function buildLineItems(ingredients) {
-  return ingredients
-    .filter(i => i && !i.startsWith('(') && i.length > 2)
-    .map(raw => {
-      const {quantity, unit, name} = parseIngredient(raw);
-      // Strip parenthetical notes from name
-      const cleanName = name.replace(/\(.*?\)/g,'').replace(/,.*$/,'').trim();
-      return {
-        name: cleanName,
-        display_text: raw.replace(/\(.*?\)/g,'').trim(),
-        measurements: [{ quantity, unit: normaliseUnit(unit) }]
-      };
-    });
-}
-
-// POST to Instacart IDP API → returns products_link_url
-async function callInstacartRecipeAPI(title, ingredients, steps, servings) {
-  const icKey = getIcKey();
-  if (!icKey) throw new Error('No Instacart API key — enter it in the banner above.');
-
-  const body = {
-    title,
-    author: 'Nourish Meal Planner',
-    servings: servings || 2,
-    expires_in: 30,
-    instructions: steps || [],
-    ingredients: buildLineItems(ingredients),
-    landing_page_configuration: {
-      enable_pantry_items: true
-    }
-  };
-
-  const resp = await fetch('https://connect.instacart.com/idp/v1/products/recipe', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': `Bearer ${icKey}`
-    },
-    body: JSON.stringify(body)
-  });
-
-  const data = await resp.json();
-  if (!resp.ok) {
-    const msg = data?.message || data?.errors?.[0]?.message || `Instacart error ${resp.status}`;
-    throw new Error(msg);
-  }
-  return data.products_link_url;
-}
-
-// POST to Instacart with a flat grocery list (shopping list endpoint)
-async function callInstacartListAPI(title, allIngredients) {
-  const icKey = getIcKey();
-  if (!icKey) throw new Error('No Instacart API key — enter it in the banner above.');
-
-  // Dedupe ingredient names
-  const seen = new Set();
-  const lineItems = allIngredients
-    .filter(i => i && !i.startsWith('(') && i.length > 2)
-    .map(raw => {
-      const {quantity, unit, name} = parseIngredient(raw);
-      const clean = name.replace(/\(.*?\)/g,'').replace(/,.*$/,'').trim();
-      if (seen.has(clean.toLowerCase())) return null;
-      seen.add(clean.toLowerCase());
-      return { name: clean, display_text: raw.replace(/\(.*?\)/g,'').trim(), measurements: [{quantity, unit: normaliseUnit(unit)}] };
-    })
-    .filter(Boolean);
-
-  const resp = await fetch('https://connect.instacart.com/idp/v1/products/recipe', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': `Bearer ${icKey}`
-    },
-    body: JSON.stringify({
-      title,
-      author: 'Nourish Meal Planner',
-      servings: 2,
-      expires_in: 30,
-      ingredients: lineItems,
-      landing_page_configuration: { enable_pantry_items: true }
-    })
-  });
-
-  const data = await resp.json();
-  if (!resp.ok) throw new Error(data?.message || `Instacart error ${resp.status}`);
-  return data.products_link_url;
-}
-
-// Show Instacart link result inline
-function showIcLink(containerEl, url) {
-  containerEl.innerHTML = `
-    <div class="ic-link-result">
-      <span>✓ Cart ready — </span>
-      <a href="${url}" target="_blank">Open on Instacart ↗</a>
-      <button class="ic-link-copy" onclick="navigator.clipboard.writeText('${url}');this.textContent='Copied!'">Copy link</button>
-    </div>`;
-}
-
-// ── Per-meal Shop on Instacart button (on big card back) ──────────────────
-async function shopMealOnInstacart(btn, mealId, mealType) {
-  const meal = MEALS[mealType]?.find(m => m.id === mealId);
-  if (!meal) return;
-  const container = btn.closest('.ic-back-container');
-  btn.classList.add('loading');
-  btn.innerHTML = '<span class="ic-spinner"></span> Sending to Instacart…';
-  try {
-    const url = await callInstacartRecipeAPI(meal.name, meal.ingredients||[], meal.steps||[], 2);
-    showIcLink(container, url);
-  } catch(e) {
-    container.innerHTML = `<div class="ic-status-msg err">⚠ ${e.message}</div>`;
-  }
-}
-
-// ── Render groceries with real Instacart integration ──────────────────────
+// ── Render groceries ─────────────────────────────────────────────────────
 function renderGroceries(g) {
   gCounter = 0;
   document.getElementById('grocery-body').innerHTML = Object.entries(g)
@@ -2994,52 +2696,13 @@ function renderGroceries(g) {
 
   const all = Object.values(g).flat();
   document.getElementById('grocery-footer').innerHTML = `
-    <div style="font-size:10px;color:var(--text3);text-align:center;margin-bottom:6px">${all.length} items for the week</div>
-    <div id="ic-week-container">
-      <button class="ic-btn" id="ic-week-btn" onclick="shopWeekOnInstacart(this)">
-        <span class="ic-logo">🛒</span> Send full week to Instacart
-      </button>
-    </div>
-    <div style="font-size:10px;color:var(--text3);text-align:center;margin:6px 0 4px">or open store directly</div>
-    <button class="store-btn" onclick="window.open('https://www.instacart.com','_blank')">
-      <div><div class="sn">Instacart</div><span class="ss">Open and shop manually</span></div>
+    <div style="font-size:10px;color:var(--text3);text-align:center;margin-bottom:6px">${all.length} items saved</div>
+    <a class="store-btn" href="grocery.html" style="text-decoration:none">
+      <div><div class="sn">🛒 Open Grocery app</div><span class="ss">In-store check-off, store assignments</span></div>
       <span style="color:var(--gold)">→</span>
-    </button>
-    <button class="store-btn" onclick="window.open('https://www.amazon.com/alm/storefront?almBrandId=QW1hem9uIEZyZXNo','_blank')">
-      <div><div class="sn">Amazon Fresh</div><span class="ss">Same-day with Prime</span></div>
-      <span style="color:var(--gold)">→</span>
-    </button>`;
+    </a>`;
 
   document.getElementById('grocery-drawer').classList.add('open');
-}
-
-async function shopWeekOnInstacart(btn) {
-  const container = document.getElementById('ic-week-container');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="ic-spinner"></span> Generating Instacart cart…';
-
-  // Collect all ingredients from the week
-  const allIngredients = [];
-  DAYS.forEach((_,di) => MEAL_TYPES.forEach(t => {
-    const m = plan[di][t];
-    if (m && m.id !== '__none__' && m.id !== '__eatout__' && m.ingredients) {
-      allIngredients.push(...m.ingredients);
-    }
-  }));
-
-  if (!allIngredients.length) {
-    container.innerHTML = '<div class="ic-status-msg err">No ingredients to send.</div>';
-    return;
-  }
-
-  const weekStr = new Date(window._mondayDate).toLocaleDateString('en-US',{month:'short',day:'numeric'});
-  try {
-    const url = await callInstacartListAPI(`Nourish — Week of ${weekStr}`, allIngredients);
-    showIcLink(container, url);
-  } catch(e) {
-    container.innerHTML = `<div class="ic-status-msg err">⚠ ${e.message}</div>
-      <button class="ic-btn" style="margin-top:6px" onclick="shopWeekOnInstacart(this)">Try again</button>`;
-  }
 }
 
 function closeGrocery() { document.getElementById('grocery-drawer').classList.remove('open'); }
@@ -3190,18 +2853,6 @@ function openBigCard(e, dayIdx, mealType) {
 
   // Reset to front face
   document.getElementById('bigcard-flipper').classList.remove('flipped');
-
-  // Add Instacart button to big card nutrition panel
-  const icOld = document.getElementById('bc-ic-container');
-  if (icOld) icOld.remove();
-  const icDiv = document.createElement('div');
-  icDiv.id = 'bc-ic-container';
-  icDiv.className = 'ic-back-container';
-  icDiv.style.cssText = 'margin-top:10px';
-  icDiv.innerHTML = `<button class="ic-back-btn" onclick="shopMealOnInstacart(this,'${meal.id}','${mealType}')">
-    🛒 Shop on Instacart
-  </button>`;
-  document.getElementById('bc-src-link').after(icDiv);
 
   // Open overlay
   const overlay = document.getElementById('bigcard-overlay');
@@ -3419,19 +3070,12 @@ function openGithubPanel() {
   const panel = document.getElementById('gh-panel');
   const isOpen = panel.classList.contains('open');
   panel.classList.toggle('open', !isOpen);
-  if (!isOpen) {
-    document.getElementById('ic-key').value = localStorage.getItem('ic_key') || '';
-    loadGhHistory();
-  }
+  if (!isOpen) loadGhHistory();
 }
 
-function saveGithubSettings() {
-  const ic = document.getElementById('ic-key').value.trim();
-  localStorage.setItem('ic_key', ic);
-  const st = document.getElementById('gh-status');
-  st.className = 'gh-status ok';
-  st.textContent = ic ? '✓ Saved.' : '✓ Instacart key cleared.';
-}
+// saveGithubSettings is kept as a no-op stub in case any old onclick still
+// references it; nothing currently does after the 2026-04-26 cleanup.
+function saveGithubSettings() {}
 
 function signOut() {
   // Clear local stuff (legacy bearer + any cached items) then redirect to /logout
