@@ -825,20 +825,15 @@ function addManual() {
 // GITHUB — IMPORT FROM NOURISH
 // ═══════════════════════════════════════════
 async function importFromNourish() {
-  if (!localStorage.getItem('nourish_browser_token')) {
-    openSettings();
-    showToast('Paste your NUC token in ⚙ settings first');
-    return;
-  }
-
+  // No token precheck — cookie auth is HttpOnly and invisible to JS. nucCall
+  // handles 401 by redirecting to /login (which bounces back here on success).
   showToast('Fetching grocery list…');
 
   let data;
   try {
     data = await nucCall('GET', '/grocery/current');
   } catch(e) {
-    if (String(e.message).includes('401')) showToast('❌ Token invalid — re-enter in ⚙ settings');
-    else showToast('❌ ' + e.message);
+    showToast('❌ ' + e.message);
     return;
   }
 
