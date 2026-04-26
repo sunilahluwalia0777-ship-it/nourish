@@ -162,7 +162,11 @@ function cleanupLegacyKeys() {
   ].forEach(k => localStorage.removeItem(k));
 }
 
-function isGhConnected() { return !!localStorage.getItem('nourish_browser_token'); }
+// "Connected" semantics changed at the cookie-auth migration: the session
+// cookie is HttpOnly so JS can't see it. We optimistically return true so
+// callers don't gate functionality — if the cookie is missing/expired,
+// nucCall() handles the redirect to /login on 401.
+function isGhConnected() { return true; }
 
 function openGithubPanel() {
   const panel = document.getElementById('gh-panel');
@@ -2780,9 +2784,10 @@ function confirmPantryAndGenerate() {
   generateGroceryList(haveItems);
 }
 
-// Step 1: validate then open pantry check
+// Step 1: validate then open pantry check.
+// Auth is no longer pre-checked here — the first nucCall in generateGroceryList
+// will redirect to /login if the session cookie is missing or expired.
 function planningComplete() {
-  if (!isGhConnected()) { alert('No NUC token. Open the ⬡ panel and paste it.'); return; }
   const hasMeals = DAYS.some((_,di) => MEAL_TYPES.some(t => {
     const m = plan[di][t];
     return m && m.id !== '__none__' && m.id !== '__eatout__';
@@ -3404,7 +3409,11 @@ function cleanupLegacyKeys() {
   ].forEach(k => localStorage.removeItem(k));
 }
 
-function isGhConnected() { return !!localStorage.getItem('nourish_browser_token'); }
+// "Connected" semantics changed at the cookie-auth migration: the session
+// cookie is HttpOnly so JS can't see it. We optimistically return true so
+// callers don't gate functionality — if the cookie is missing/expired,
+// nucCall() handles the redirect to /login on 401.
+function isGhConnected() { return true; }
 
 function openGithubPanel() {
   const panel = document.getElementById('gh-panel');
