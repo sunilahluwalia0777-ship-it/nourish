@@ -277,16 +277,22 @@ header {
 const NUC_API = 'https://nutrition-webhook.sunilahluwalia0777.workers.dev/api';
 
 async function nucCall(method, path, body) {
+  const headers = { 'Content-Type': 'application/json' };
+  // Legacy bearer fallback — works if a token has been pasted; harmless if not.
   const token = localStorage.getItem('nourish_browser_token');
-  if (!token) throw new Error('No NUC token. Paste yours in the field above.');
+  if (token) headers['Authorization'] = 'Bearer ' + token;
   const res = await fetch(NUC_API + path, {
     method,
-    headers: {
-      'Authorization': 'Bearer ' + token,
-      'Content-Type': 'application/json',
-    },
+    headers,
+    credentials: 'include',  // send the session cookie cross-origin
     body: body ? JSON.stringify(body) : undefined,
   });
+  if (res.status === 401) {
+    // Cookie expired or never set — bounce through /login
+    const next = encodeURIComponent(location.href);
+    location.href = 'https://nutrition-webhook.sunilahluwalia0777.workers.dev/login?next=' + next;
+    throw new Error('Redirecting to sign-in…');
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`${method} ${path} → ${res.status}: ${text.slice(0, 200)}`);
